@@ -1,0 +1,19 @@
+# ── Production serving layer (FastAPI) ──
+# Deliberately light: serves the precomputed serving/ bundle. NO geopandas,
+# folium, streamlit, or the raw data — only what's needed to read the small
+# per-tract store, run the RF predictor, and answer HTTP.
+#
+# Exact pins below MUST match requirements-pipeline.txt so the model.joblib
+# trained in the build layer loads byte-compatibly here.
+pandas==3.0.2
+numpy==2.4.4
+scikit-learn==1.8.0
+joblib==1.5.3
+
+# Web stack. Provisional pins (not yet installed locally); Phase 1 will
+# lock these against the actual built environment.
+fastapi~=0.115
+uvicorn[standard]~=0.34
+pydantic~=2.10
+pydantic-settings~=2.7
+orjson~=3.10           # fast JSON responses for the /api/tract endpoints

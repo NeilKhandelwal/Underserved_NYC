@@ -1,0 +1,10 @@
+# ── Current Streamlit app (legacy UI) ──
+# Keeps app.py running locally during the re-platform to FastAPI + MapLibre.
+# Will be retired once the new frontend lands (Phase 2). Pulls the full
+# pipeline stack because the app reads master.geojson via geopandas.
+
+-r requirements-pipeline.txt
+
+streamlit==1.56.0
+folium==0.20.0
+streamlit-folium==0.27.1

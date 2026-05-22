@@ -1,0 +1,10 @@
+# Aggregate for LOCAL DEVELOPMENT: runs the batch pipeline, the validation
+# suite, and the current Streamlit app. `pip install -r requirements.txt`
+# behaves as before.
+#
+#   requirements-pipeline.txt  build layer (geo / ML / stats)
+#   requirements-app.txt       current Streamlit UI (+ pipeline)
+#   requirements-api.txt       production serving layer (light) — install separately
+#
+# For production deploys, install ONLY requirements-api.txt.
+-r requirements-app.txt

@@ -5,7 +5,7 @@ PY  := .venv/bin/python
 PIP := .venv/bin/pip
 
 .DEFAULT_GOAL := help
-.PHONY: help install install-pipeline install-api artifacts serving-bundle validate app clean
+.PHONY: help install install-pipeline install-api install-dev artifacts serving-bundle validate app api test lint clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -20,6 +20,9 @@ install-pipeline: ## Install only the batch pipeline + validation deps
 install-api: ## Install only the light production serving deps
 	$(PIP) install -r requirements-api.txt
 
+install-dev: ## Install serving deps + test/lint tooling
+	$(PIP) install -r requirements-dev.txt
+
 artifacts: ## Rebuild master.geojson + model from raw data (needs data/, ~5-15 min)
 	$(PY) -m pipeline.score
 	$(PY) -m pipeline.demographic_analysis
@@ -32,6 +35,15 @@ validate: ## Run the statistical validation suite
 
 app: ## Run the current Streamlit app
 	.venv/bin/streamlit run app.py
+
+api: ## Run the FastAPI serving layer (http://127.0.0.1:8000, /docs for Swagger)
+	.venv/bin/uvicorn api.main:app --reload --port 8000
+
+test: ## Run the API test suite
+	$(PY) -m pytest tests/ -q
+
+lint: ## Lint api/, tests/, scripts/
+	.venv/bin/ruff check api/ tests/ scripts/
 
 clean: ## Remove the generated serving bundle
 	rm -rf serving/data serving/tiles

@@ -1,0 +1,6 @@
+# Developer tooling: run the API tests + lint.
+-r requirements-api.txt
+
+pytest==9.0.2
+httpx==0.28.1        # FastAPI TestClient transport
+ruff==0.14.5

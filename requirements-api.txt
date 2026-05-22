@@ -10,10 +10,8 @@ numpy==2.4.4
 scikit-learn==1.8.0
 joblib==1.5.3
 
-# Web stack. Provisional pins (not yet installed locally); Phase 1 will
-# lock these against the actual built environment.
-fastapi~=0.115
-uvicorn[standard]~=0.34
-pydantic~=2.10
-pydantic-settings~=2.7
-orjson~=3.10           # fast JSON responses for the /api/tract endpoints
+# Web stack. Pinned to the versions installed and tested in Phase 1.
+fastapi==0.136.1
+uvicorn[standard]==0.47.0
+pydantic==2.13.4
+pydantic-settings==2.12.0

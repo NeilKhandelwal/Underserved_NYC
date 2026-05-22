@@ -5,7 +5,7 @@ PY  := .venv/bin/python
 PIP := .venv/bin/pip
 
 .DEFAULT_GOAL := help
-.PHONY: help install install-pipeline install-api install-dev artifacts serving-bundle validate app api test lint clean
+.PHONY: help install install-pipeline install-api install-dev artifacts serving-bundle validate app api test lint frontend-install frontend-dev frontend-build clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -45,5 +45,14 @@ test: ## Run the API test suite
 lint: ## Lint api/, tests/, scripts/
 	.venv/bin/ruff check api/ tests/ scripts/
 
-clean: ## Remove the generated serving bundle
-	rm -rf serving/data serving/tiles
+frontend-install: ## Install frontend npm dependencies
+	cd frontend && npm install
+
+frontend-dev: ## Run the Vite dev server (proxies /api + /tiles to :8000)
+	cd frontend && npm run dev
+
+frontend-build: ## Build the frontend to frontend/dist (served by `make api` in prod)
+	cd frontend && npm run build
+
+clean: ## Remove the generated serving bundle + frontend build
+	rm -rf serving/data serving/tiles frontend/dist

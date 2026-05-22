@@ -36,8 +36,8 @@ GEOJSON_PATH = OUTPUT_DIR / "master.geojson"
 MODEL_PATH = OUTPUT_DIR / "demographic_model.joblib"
 MODEL_META_PATH = OUTPUT_DIR / "demographic_model.json"
 
-# Identity / label columns excluded from numeric summary stats.
-ID_COLS = {"GEOID", "borough", "neighborhood"}
+# Identity / label / non-metric columns excluded from numeric summary stats.
+ID_COLS = {"GEOID", "borough", "neighborhood", "centroid_lon", "centroid_lat"}
 
 
 def _is_number(v: object) -> bool:
@@ -60,14 +60,40 @@ def _quantile(sorted_vals: list[float], p: float) -> float:
     return sorted_vals[lo] * (1 - frac) + sorted_vals[hi] * frac
 
 
+def _centroid(geometry: dict | None) -> tuple[float | None, float | None]:
+    """Mean of all coordinate pairs — a cheap centroid good enough for map
+    fly-to / panning (avoids a shapely dependency in this stdlib-only step)."""
+    if not geometry:
+        return None, None
+    xs: list[float] = []
+    ys: list[float] = []
+
+    def walk(coords) -> None:
+        if isinstance(coords, (list, tuple)):
+            if coords and isinstance(coords[0], (int, float)):
+                xs.append(coords[0])
+                ys.append(coords[1])
+            else:
+                for c in coords:
+                    walk(c)
+
+    walk(geometry.get("coordinates"))
+    if not xs:
+        return None, None
+    return sum(xs) / len(xs), sum(ys) / len(ys)
+
+
 def build_tract_records(features: list[dict]) -> dict[str, dict]:
-    """GEOID -> {all non-geometry properties}."""
+    """GEOID -> {all non-geometry properties + centroid for map fly-to}."""
     records: dict[str, dict] = {}
     for feat in features:
         props = dict(feat.get("properties", {}))
         geoid = props.get("GEOID")
         if geoid is None:
             continue
+        lon, lat = _centroid(feat.get("geometry"))
+        props["centroid_lon"] = lon
+        props["centroid_lat"] = lat
         records[str(geoid)] = props
     return records
 
@@ -123,6 +149,8 @@ def build_pmtiles() -> bool:
         "--projection=EPSG:4326",
         "--drop-densest-as-needed",
         "--no-tile-size-limit",
+        "--quiet",
+        "--no-progress-indicator",
         "--force",
         str(GEOJSON_PATH),
     ]

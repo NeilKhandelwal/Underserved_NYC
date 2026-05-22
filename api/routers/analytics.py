@@ -32,6 +32,11 @@ def get_model(store: DataStore = Depends(get_store)):
 
 @router.get("/overlays", response_model=OverlaysResponse)
 def get_overlays(store: DataStore = Depends(get_store)):
-    """Map overlay definitions + the fixed symmetric bins for the residual layer."""
+    """Map overlay definitions (with color domains) + the fixed symmetric bins
+    for the residual layer."""
+    overlays = overlay_list()
+    for o in overlays:
+        stat = store.citywide.get(o["column"])
+        o["domain"] = [stat["min"], stat["max"]] if stat else None
     residuals = [t.get("risk_residual") for t in store.tracts.values()]
-    return {"overlays": overlay_list(), "residual_bins": residual_bins(residuals)}
+    return {"overlays": overlays, "residual_bins": residual_bins(residuals)}

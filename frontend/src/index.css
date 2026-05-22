@@ -1,0 +1,166 @@
+:root {
+  --bg: #0c0c14;
+  --card: rgba(20, 20, 32, 0.92);
+  --card-solid: #1e1e2e;
+  --accent: #f4a261;
+  --text: #e8e8ee;
+  --muted: #9a9aa8;
+  --red: #e63946;
+  --amber: #f4a261;
+  --teal: #2ec4b6;
+  --border: rgba(255, 255, 255, 0.09);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+}
+
+button { font-family: inherit; cursor: pointer; }
+
+/* ── App shell ── */
+.app { position: relative; height: 100vh; overflow: hidden; }
+
+/* ── Tab bar (fixed top) ── */
+.tabbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1100;
+  display: flex; align-items: flex-end; gap: 4px;
+  padding: 0 28px; min-height: 52px;
+  background: rgba(12, 12, 20, 0.96);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+}
+.tabbar .brand {
+  font-weight: 800; font-size: 0.9rem; letter-spacing: 0.02em;
+  margin-right: 18px; padding-bottom: 12px; color: var(--text);
+}
+.tabbar .brand span { color: var(--accent); }
+.tab {
+  background: transparent; border: none; color: var(--muted);
+  font-size: 0.82rem; font-weight: 500; letter-spacing: 0.04em;
+  text-transform: uppercase; padding: 8px 16px 10px;
+  border-bottom: 2px solid transparent; transition: color 0.15s, border-color 0.15s;
+}
+.tab:hover { color: #ddd; border-bottom-color: rgba(244, 162, 97, 0.4); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Map ── */
+.map-root { position: absolute; inset: 52px 0 0 0; }
+.maplibregl-map { background: #0c0c14; }
+
+/* ── Panels (non-map tabs) ── */
+.panel {
+  position: absolute; inset: 52px 0 0 0; overflow-y: auto;
+  padding: 28px 32px 60px; max-width: 1100px; margin: 0 auto;
+}
+.panel h2 { font-size: 1.3rem; margin: 0 0 4px; }
+.panel .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 20px; max-width: 720px; }
+
+/* ── Floating cards over the map ── */
+.card {
+  position: absolute; z-index: 1000; max-height: 78vh; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 18px 16px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+}
+.card.filters { top: 68px; left: 16px; width: 248px; }
+.card.detail { top: 68px; right: 16px; width: 320px; }
+.card h3 { margin: 0 0 10px; font-size: 0.95rem; }
+.card .close {
+  position: absolute; top: 10px; right: 12px; background: none; border: none;
+  color: var(--muted); font-size: 1.1rem; line-height: 1;
+}
+.card .close:hover { color: #fff; }
+
+/* ── Overlay radio list ── */
+.overlay-opt {
+  display: flex; align-items: center; gap: 8px; padding: 5px 6px;
+  border-radius: 6px; font-size: 0.85rem; color: var(--muted);
+}
+.overlay-opt:hover { background: rgba(255, 255, 255, 0.04); color: var(--text); }
+.overlay-opt.active { color: var(--text); background: rgba(244, 162, 97, 0.12); }
+.overlay-opt input { accent-color: var(--accent); }
+.legend-note { font-size: 0.72rem; color: var(--muted); margin-top: 10px; line-height: 1.4; }
+
+/* ── Color legend ── */
+.legend-bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; margin: 8px 0 4px; }
+.legend-bar > div { flex: 1; }
+.legend-ends { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); }
+
+/* ── Detail card ── */
+.tract-name { font-size: 1.25rem; font-weight: 700; line-height: 1.15; }
+.tract-boro { font-size: 0.78rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
+.tract-id { font-size: 0.72rem; color: #888; font-family: monospace; margin-top: 2px; }
+.score-big { text-align: center; margin: 14px 0; }
+.score-big .v { font-size: 2.8rem; font-weight: 900; line-height: 1; }
+.score-big .l { color: var(--muted); font-size: 0.75rem; }
+.divider { border-top: 1px solid var(--border); margin: 12px 0; }
+
+.metric-box { background: var(--card-solid); border-radius: 8px; padding: 10px 14px; margin-bottom: 8px; }
+.metric-label { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.metric-value { font-size: 1.25rem; font-weight: 700; color: #fff; }
+.metric-compare { font-size: 0.78rem; color: var(--accent); }
+
+.band-high { color: var(--red); }
+.band-elevated { color: var(--amber); }
+.band-low { color: var(--teal); }
+
+/* ── Tables ── */
+.controls { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
+.controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--muted); }
+.controls select, .controls input[type="number"] {
+  background: var(--card-solid); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 6px 8px; font-size: 0.85rem;
+}
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { background: var(--card-solid); color: var(--muted); border: none; padding: 6px 12px; font-size: 0.8rem; }
+.seg button.active { background: rgba(244, 162, 97, 0.16); color: var(--accent); }
+
+table.data { width: 100%; border-collapse: collapse; font-size: 0.86rem; }
+table.data th {
+  text-align: left; color: var(--muted); font-weight: 600; font-size: 0.72rem;
+  text-transform: uppercase; letter-spacing: 0.04em; padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+}
+table.data td { padding: 8px 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+table.data td.num { font-variant-numeric: tabular-nums; text-align: right; }
+table.data tbody tr { cursor: pointer; }
+table.data tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
+td.name { color: #fff; font-weight: 500; }
+td.pos { color: var(--red); }
+td.neg { color: var(--teal); }
+
+/* ── Bar charts (correlations / importance) ── */
+.bars { display: flex; flex-direction: column; gap: 6px; }
+.bar-row { display: grid; grid-template-columns: 180px 1fr 56px; align-items: center; gap: 10px; font-size: 0.82rem; }
+.bar-row .lbl { color: var(--text); text-align: right; }
+.bar-track { background: rgba(255, 255, 255, 0.05); border-radius: 4px; height: 16px; position: relative; }
+.bar-fill { height: 100%; border-radius: 4px; }
+.bar-row .val { color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* ── Predictor sliders ── */
+.slider-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.slider-box .s-top { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 4px; }
+.slider-box .s-top .sv { color: var(--accent); font-variant-numeric: tabular-nums; }
+.slider-box input[type="range"] { width: 100%; accent-color: var(--accent); }
+.pred-result { text-align: center; padding: 18px; background: var(--card-solid); border-radius: 10px; margin: 20px 0; }
+.pred-result .v { font-size: 2.6rem; font-weight: 900; }
+.pred-result .l { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ── Methodology ── */
+.prose { max-width: 760px; line-height: 1.6; }
+.prose h3 { margin-top: 28px; }
+.prose table { border-collapse: collapse; margin: 12px 0; font-size: 0.88rem; }
+.prose th, .prose td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
+.prose code { background: var(--card-solid); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+
+.loading { color: var(--muted); padding: 20px; font-size: 0.9rem; }
+.error { color: var(--red); padding: 20px; font-size: 0.9rem; }

@@ -61,6 +61,7 @@ class OverlayInfo(BaseModel):
     scheme: str
     reverse: bool
     symmetric_bins: bool
+    domain: list[float] | None = None  # [min, max] for continuous color scales
 
 
 class OverlaysResponse(BaseModel):

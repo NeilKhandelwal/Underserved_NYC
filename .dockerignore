@@ -1,24 +1,22 @@
-# Large / sensitive dirs that must not enter the build context
-data/
-.venv/
-venv/
-node_modules/
+# Minimal build context: ignore everything, then allow only the paths the
+# Dockerfile actually COPYs. This keeps the context small/fast and — on macOS —
+# avoids forcing Docker to read unrelated iCloud-evicted ("dataless") files,
+# which makes "load build context" crawl/hang.
+*
+
+# Paths the Dockerfile needs (see COPY lines in ./Dockerfile)
+!api/
+!scripts/
+!output/
+!frontend/
+!requirements-api.txt
+
+# Re-exclude heavy/derived subdirs that live inside the allowed dirs
+frontend/node_modules/
 frontend/dist/
 frontend/.vite/
-.git/
-.pytest_cache/
-.ruff_cache/
-__pycache__/
 
-# Serving bundle is rebuilt inside Docker from output/
-serving/
-
-# OS / editor
-.DS_Store
-*.swp
-.idea/
-.vscode/
-
-# Env / secrets
-.env
-.env.*
+# Caches / compiled junk that can appear under allowed dirs
+**/__pycache__/
+**/*.pyc
+**/.DS_Store

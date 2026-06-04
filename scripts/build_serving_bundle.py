@@ -145,7 +145,10 @@ def build_pmtiles() -> bool:
         "tippecanoe",
         "-o", str(out),
         "-l", "tracts",
-        "-zg",                       # auto-pick max zoom
+        # Tract-level map: cap at z13 (matches the frontend maxZoom) so edges
+        # stay crisp up to the cap without storing building-level precision.
+        "--minimum-zoom=9",
+        "--maximum-zoom=13",
         "--projection=EPSG:4326",
         "--drop-densest-as-needed",
         "--no-tile-size-limit",

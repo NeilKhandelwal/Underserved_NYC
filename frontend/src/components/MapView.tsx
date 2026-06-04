@@ -18,6 +18,17 @@ function ensureProtocol() {
   protocolRegistered = true;
 }
 
+// Drop the basemap's road/street layers (OpenMapTiles "transportation" schema)
+// so only land, water, boundaries, and place labels remain under the choropleth.
+function stripStreets(map: maplibregl.Map) {
+  for (const layer of map.getStyle().layers ?? []) {
+    const sourceLayer = (layer as { "source-layer"?: string })["source-layer"];
+    if (sourceLayer === "transportation" || sourceLayer === "transportation_name") {
+      if (map.getLayer(layer.id)) map.removeLayer(layer.id);
+    }
+  }
+}
+
 interface Props {
   overlay: OverlayInfo;
   residualBins: number[] | null;
@@ -44,12 +55,17 @@ export function MapView({ overlay, residualBins, selectedGeoid, flyTo, onSelect 
       style: STYLE,
       center: NYC_CENTER,
       zoom: 10,
+      // Tract-level analysis: cap zoom so the map never overzooms the tiles
+      // (which stair-steps edges and reveals basemap buildings under the fill).
+      maxZoom: 13,
+      minZoom: 9,
       attributionControl: { compact: true },
     });
     mapRef.current = map;
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
 
     map.on("load", () => {
+      stripStreets(map);
       map.addSource(SOURCE, {
         type: "vector",
         url: "pmtiles:///tiles/tracts.pmtiles",
@@ -83,7 +99,12 @@ export function MapView({ overlay, residualBins, selectedGeoid, flyTo, onSelect 
           type: "line",
           source: SOURCE,
           "source-layer": SOURCE_LAYER,
-          paint: { "line-color": "rgba(40,40,55,0.35)", "line-width": 0.3 },
+          paint: {
+            "line-color": "#2a2a38",
+            "line-opacity": 0.55,
+            // Thicken with zoom so borders stay legible as you zoom in.
+            "line-width": ["interpolate", ["linear"], ["zoom"], 9, 0.5, 11, 1, 13, 1.8],
+          },
         },
         firstSymbol,
       );
@@ -174,7 +195,7 @@ export function MapView({ overlay, residualBins, selectedGeoid, flyTo, onSelect 
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !flyTo) return;
-    map.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: 13.5, duration: 900 });
+    map.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: 12.5, duration: 900 });
   }, [flyTo]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;

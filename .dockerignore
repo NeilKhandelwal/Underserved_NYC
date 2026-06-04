@@ -1,0 +1,24 @@
+# Large / sensitive dirs that must not enter the build context
+data/
+.venv/
+venv/
+node_modules/
+frontend/dist/
+frontend/.vite/
+.git/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+
+# Serving bundle is rebuilt inside Docker from output/
+serving/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Env / secrets
+.env
+.env.*

@@ -31,6 +31,14 @@ export interface Correlation {
   r: number;
 }
 
+export interface ScatterResponse {
+  column: string;
+  label: string;
+  r: number;
+  n: number;
+  points: [number, number][]; // [feature value, risk score]
+}
+
 export interface FeatureRange {
   min: number;
   max: number;

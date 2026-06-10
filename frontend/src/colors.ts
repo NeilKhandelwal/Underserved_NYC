@@ -7,10 +7,10 @@ export const RDYLGN = [
   "#d9ef8b", "#a6d96a", "#66bd63", "#1a9850",
 ];
 
-const MISSING = "#d9d9d9"; // matches folium's nan_fill_color "lightgray"
+export const MISSING = "#d9d9d9"; // matches folium's nan_fill_color "lightgray"
 
 // 6-class diverging for the residual layer (RdYlGn_r: negative=green, positive=red).
-const RESIDUAL_COLORS = [
+export const RESIDUAL_COLORS = [
   "#1a9850", "#91cf60", "#d9ef8b", "#fee08b", "#fc8d59", "#d73027",
 ];
 

@@ -83,6 +83,7 @@ export function App() {
           <FilterCard
             overlays={overlaysResp.overlays}
             selected={overlay}
+            residualBins={overlaysResp.residual_bins}
             onChange={setOverlayLabel}
           />
           {selectedGeoid && (
@@ -98,7 +99,13 @@ export function App() {
       )}
       {tab === "demographics" && (
         <div className="panel">
-          <Demographics />
+          <Demographics
+            overlays={overlaysResp?.overlays ?? []}
+            onShowOnMap={(label) => {
+              setOverlayLabel(label);
+              setTab("map");
+            }}
+          />
         </div>
       )}
       {tab === "predictor" && (

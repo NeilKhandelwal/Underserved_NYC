@@ -3,6 +3,7 @@ import type {
   ModelInfo,
   OverlaysResponse,
   PredictResponse,
+  ScatterResponse,
   TractDetail,
   TractSummary,
   WatchlistDirection,
@@ -18,6 +19,7 @@ export const api = {
   overlays: () => getJSON<OverlaysResponse>("/api/overlays"),
   model: () => getJSON<ModelInfo>("/api/model"),
   correlations: () => getJSON<Correlation[]>("/api/correlations"),
+  scatter: (column: string) => getJSON<ScatterResponse>(`/api/scatter/${column}`),
   tract: (geoid: string) => getJSON<TractDetail>(`/api/tract/${geoid}`),
 
   watchlist: (direction: WatchlistDirection, boroughs: string[], n: number) => {

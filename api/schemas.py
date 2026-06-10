@@ -38,6 +38,14 @@ class Correlation(BaseModel):
     r: float
 
 
+class ScatterResponse(BaseModel):
+    column: str
+    label: str
+    r: float
+    n: int
+    points: list[list[float]]  # [feature value, risk_score] pairs
+
+
 class FeatureRange(BaseModel):
     min: float
     max: float

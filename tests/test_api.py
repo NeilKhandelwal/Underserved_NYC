@@ -84,6 +84,18 @@ def test_correlations(client):
     assert all(-1.0 <= row["r"] <= 1.0 for row in rows)
 
 
+def test_scatter(client):
+    column = client.get("/api/correlations").json()[0]["column"]
+    r = client.get(f"/api/scatter/{column}")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["column"] == column
+    assert body["n"] == len(body["points"]) > 2000
+    assert all(0 <= y <= 100 for _, y in body["points"])
+
+    assert client.get("/api/scatter/not_a_column").status_code == 404
+
+
 def test_model_info(client):
     body = client.get("/api/model").json()
     assert 0 <= body["r2"] <= 1

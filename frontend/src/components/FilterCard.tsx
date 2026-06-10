@@ -6,10 +6,19 @@ interface Props {
   overlays: OverlayInfo[];
   selected: OverlayInfo;
   residualBins: number[] | null;
+  showDistricts: boolean;
   onChange: (label: string) => void;
+  onToggleDistricts: (show: boolean) => void;
 }
 
-export function FilterCard({ overlays, selected, residualBins, onChange }: Props) {
+export function FilterCard({
+  overlays,
+  selected,
+  residualBins,
+  showDistricts,
+  onChange,
+  onToggleDistricts,
+}: Props) {
   return (
     <div className="card filters">
       <h3>Map Overlay</h3>
@@ -27,6 +36,14 @@ export function FilterCard({ overlays, selected, residualBins, onChange }: Props
           {o.label}
         </label>
       ))}
+      <label className="overlay-opt districts-toggle">
+        <input
+          type="checkbox"
+          checked={showDistricts}
+          onChange={(e) => onToggleDistricts(e.target.checked)}
+        />
+        Council district boundaries
+      </label>
       {selected.symmetric_bins && residualBins ? (
         <ResidualLegend bins={residualBins} />
       ) : (

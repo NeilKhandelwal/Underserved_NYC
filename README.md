@@ -2,6 +2,8 @@
 
 An interactive map and API that quantifies **municipal neglect** across every NYC census tract — then surfaces the tracts where actual neglect *exceeds* what poverty, race, and demographics alone predict. That unexplained residual is the signal: it likely reflects agency routing decisions, inspection gaps, and political responsiveness rather than who lives there.
 
+**Live:** [underserved-nyc.fly.dev](https://underserved-nyc.fly.dev)
+
 ---
 
 ## Quick Start

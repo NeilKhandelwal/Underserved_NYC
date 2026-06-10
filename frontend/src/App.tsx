@@ -25,6 +25,7 @@ export function App() {
   const [model, setModel] = useState<ModelInfo | null>(null);
   const [overlayLabel, setOverlayLabel] = useState("Risk Score");
   const [selectedGeoid, setSelectedGeoid] = useState<string | null>(null);
+  const [showDistricts, setShowDistricts] = useState(false);
   const [flyTo, setFlyTo] = useState<{ lon: number; lat: number; key: number } | null>(null);
   const [tab, setTab] = useState<Tab>("map");
 
@@ -73,6 +74,7 @@ export function App() {
           <MapView
             overlay={overlay}
             residualBins={overlaysResp?.residual_bins ?? null}
+            showDistricts={showDistricts}
             selectedGeoid={selectedGeoid}
             flyTo={flyTo}
             onSelect={(geoid) => setSelectedGeoid(geoid)}
@@ -86,7 +88,9 @@ export function App() {
             overlays={overlaysResp.overlays}
             selected={overlay}
             residualBins={overlaysResp.residual_bins}
+            showDistricts={showDistricts}
             onChange={setOverlayLabel}
+            onToggleDistricts={setShowDistricts}
           />
           {selectedGeoid && (
             <DetailCard geoid={selectedGeoid} onClose={() => setSelectedGeoid(null)} />

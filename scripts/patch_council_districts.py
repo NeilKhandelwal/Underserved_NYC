@@ -16,6 +16,10 @@ serving bundle's fly-to centroid) is tested against district polygons with
 even-odd ray casting (handles holes). Centroids that land in no district
 (waterfront slivers) fall back to the nearest district centroid and are
 reported.
+
+Also writes ``output/districts.geojson``: Douglas-Peucker-simplified district
+outlines plus one label point per district, light enough (~a few hundred KB)
+for the frontend to draw as a map overlay.
 """
 from __future__ import annotations
 
@@ -27,6 +31,11 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_DISTRICTS = PROJECT_ROOT / "data" / "nycc.geojson"
 DEFAULT_GEOJSON = PROJECT_ROOT / "output" / "master.geojson"
+DEFAULT_OVERLAY_OUT = PROJECT_ROOT / "output" / "districts.geojson"
+
+# ~20 m simplification tolerance: invisible at the map's max zoom (z13) but
+# cuts the raw 98k boundary points by an order of magnitude.
+SIMPLIFY_TOLERANCE_DEG = 0.0002
 
 DISTRICT_KEYS = ("coundist", "CounDist", "coun_dist", "COUNDIST")
 
@@ -123,10 +132,80 @@ def assign(lon: float, lat: float, districts: list[dict]) -> tuple[int, bool]:
     return nearest["number"], True
 
 
+def _dp_simplify(ring: list[list[float]], tol: float) -> list[list[float]]:
+    """Douglas–Peucker on one ring (iterative, perpendicular distance in deg)."""
+    if len(ring) <= 4:
+        return ring
+    keep = [False] * len(ring)
+    keep[0] = keep[-1] = True
+    stack = [(0, len(ring) - 1)]
+    while stack:
+        lo, hi = stack.pop()
+        if hi <= lo + 1:
+            continue
+        ax, ay = ring[lo][0], ring[lo][1]
+        bx, by = ring[hi][0], ring[hi][1]
+        dx, dy = bx - ax, by - ay
+        seg_sq = dx * dx + dy * dy
+        best_d, best_i = -1.0, -1
+        for i in range(lo + 1, hi):
+            px, py = ring[i][0], ring[i][1]
+            if seg_sq == 0:
+                d = ((px - ax) ** 2 + (py - ay) ** 2) ** 0.5
+            else:
+                t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / seg_sq))
+                d = ((px - (ax + t * dx)) ** 2 + (py - (ay + t * dy)) ** 2) ** 0.5
+            if d > best_d:
+                best_d, best_i = d, i
+        if best_d > tol:
+            keep[best_i] = True
+            stack.append((lo, best_i))
+            stack.append((best_i, hi))
+    out = [ring[i] for i, k in enumerate(keep) if k]
+    return out if len(out) >= 4 else ring
+
+
+def _simplify_geometry(geometry: dict, tol: float) -> dict:
+    def simp_poly(poly):
+        return [
+            [[round(x, 5), round(y, 5)] for x, y in _dp_simplify(ring, tol)]
+            for ring in poly
+        ]
+
+    coords = geometry["coordinates"]
+    if geometry["type"] == "Polygon":
+        return {"type": "Polygon", "coordinates": simp_poly(coords)}
+    return {"type": "MultiPolygon", "coordinates": [simp_poly(p) for p in coords]}
+
+
+def write_overlay(districts: list[dict], path: Path) -> None:
+    """Simplified outlines + one label point per district, for the map layer."""
+    features = []
+    for d in districts:
+        features.append({
+            "type": "Feature",
+            "properties": {"kind": "district", "coundist": d["number"]},
+            "geometry": _simplify_geometry(d["geometry"], SIMPLIFY_TOLERANCE_DEG),
+        })
+        lon, lat = d["centroid"]
+        features.append({
+            "type": "Feature",
+            "properties": {"kind": "label", "coundist": d["number"]},
+            "geometry": {"type": "Point", "coordinates": [round(lon, 5), round(lat, 5)]},
+        })
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        json.dump({"type": "FeatureCollection", "features": features}, f,
+                  separators=(",", ":"))
+    print(f"[write] {path}  ({path.stat().st_size / 1e6:.2f} MB, "
+          f"{len(districts)} districts + labels)")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--districts", type=Path, default=DEFAULT_DISTRICTS)
     ap.add_argument("--geojson", type=Path, default=DEFAULT_GEOJSON)
+    ap.add_argument("--overlay-out", type=Path, default=DEFAULT_OVERLAY_OUT)
     args = ap.parse_args()
 
     for path in (args.districts, args.geojson):
@@ -135,6 +214,7 @@ def main() -> None:
 
     districts = load_districts(args.districts)
     print(f"[read]  {args.districts}  ({len(districts)} districts)")
+    write_overlay(districts, args.overlay_out)
 
     with open(args.geojson) as f:
         gj = json.load(f)

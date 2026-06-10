@@ -35,6 +35,7 @@ TILES_OUT = SERVING_DIR / "tiles"
 GEOJSON_PATH = OUTPUT_DIR / "master.geojson"
 MODEL_PATH = OUTPUT_DIR / "demographic_model.joblib"
 MODEL_META_PATH = OUTPUT_DIR / "demographic_model.json"
+DISTRICTS_OVERLAY_PATH = OUTPUT_DIR / "districts.geojson"
 
 # Identity / label / non-metric columns excluded from numeric summary stats.
 ID_COLS = {
@@ -203,6 +204,16 @@ def main() -> None:
     print(f"[copy]  {DATA_OUT / MODEL_META_PATH.name}")
 
     build_pmtiles()
+
+    # Council-district outlines for the map overlay (produced by
+    # scripts/patch_council_districts.py). Optional: warn-and-skip if absent.
+    if DISTRICTS_OVERLAY_PATH.exists():
+        TILES_OUT.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(DISTRICTS_OVERLAY_PATH, TILES_OUT / DISTRICTS_OVERLAY_PATH.name)
+        print(f"[copy]  {TILES_OUT / DISTRICTS_OVERLAY_PATH.name}")
+    else:
+        print(f"[skip]  {DISTRICTS_OVERLAY_PATH} missing — no district overlay "
+              "(run scripts/patch_council_districts.py)")
 
     print("\nServing bundle ready under serving/.")
 

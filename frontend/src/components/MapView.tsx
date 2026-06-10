@@ -32,12 +32,20 @@ function stripStreets(map: maplibregl.Map) {
 interface Props {
   overlay: OverlayInfo;
   residualBins: number[] | null;
+  showDistricts: boolean;
   selectedGeoid: string | null;
   flyTo: { lon: number; lat: number; key: number } | null;
   onSelect: (geoid: string | null) => void;
 }
 
-export function MapView({ overlay, residualBins, selectedGeoid, flyTo, onSelect }: Props) {
+export function MapView({
+  overlay,
+  residualBins,
+  showDistricts,
+  selectedGeoid,
+  flyTo,
+  onSelect,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const readyRef = useRef(false);
@@ -45,6 +53,8 @@ export function MapView({ overlay, residualBins, selectedGeoid, flyTo, onSelect 
   const hoveredRef = useRef<string | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const showDistrictsRef = useRef(showDistricts);
+  showDistrictsRef.current = showDistricts;
 
   // Init map once.
   useEffect(() => {
@@ -108,6 +118,51 @@ export function MapView({ overlay, residualBins, selectedGeoid, flyTo, onSelect 
         },
         firstSymbol,
       );
+      // Council district boundaries + number labels, toggled from FilterCard.
+      map.addSource("districts", {
+        type: "geojson",
+        data: "/tiles/districts.geojson",
+      });
+      const visibility = showDistrictsRef.current ? "visible" : "none";
+      // Reuse a font the basemap style is known to serve glyphs for.
+      const styledFont = map
+        .getStyle()
+        .layers?.map((l) =>
+          l.type === "symbol"
+            ? (l as { layout?: Record<string, unknown> }).layout?.["text-font"]
+            : undefined,
+        )
+        .find((f) => Array.isArray(f) && f.length > 0) as string[] | undefined;
+      map.addLayer({
+        id: "districts-line",
+        type: "line",
+        source: "districts",
+        filter: ["==", ["get", "kind"], "district"],
+        layout: { visibility },
+        paint: {
+          "line-color": "#3a3a8c",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 9, 1.4, 13, 3],
+          "line-opacity": 0.9,
+        },
+      });
+      map.addLayer({
+        id: "districts-label",
+        type: "symbol",
+        source: "districts",
+        filter: ["==", ["get", "kind"], "label"],
+        layout: {
+          visibility,
+          "text-field": ["to-string", ["get", "coundist"]],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 9, 12, 13, 20],
+          ...(styledFont ? { "text-font": styledFont } : {}),
+        },
+        paint: {
+          "text-color": "#2d2d7a",
+          "text-halo-color": "rgba(255,255,255,0.9)",
+          "text-halo-width": 2,
+        },
+      });
+
       map.addLayer({
         id: "tracts-selected",
         type: "line",
@@ -163,6 +218,16 @@ export function MapView({ overlay, residualBins, selectedGeoid, flyTo, onSelect 
     if (!map || !readyRef.current) return;
     map.setPaintProperty(FILL, "fill-color", fillColor(overlay, residualBins));
   }, [overlay, residualBins]);
+
+  // Toggle the district boundary layers.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !readyRef.current) return;
+    const visibility = showDistricts ? "visible" : "none";
+    for (const id of ["districts-line", "districts-label"]) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visibility);
+    }
+  }, [showDistricts]);
 
   // Reflect the selected tract via feature-state.
   useEffect(() => {

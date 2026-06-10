@@ -10,7 +10,7 @@ An interactive map and API that quantifies **municipal neglect** across every NY
 
 ```bash
 # Clone and install
-git clone https://github.com/<you>/Underserved_NYC.git
+git clone https://github.com/NeilKhandelwal/Underserved_NYC.git
 cd Underserved_NYC
 
 python -m venv .venv && source .venv/bin/activate

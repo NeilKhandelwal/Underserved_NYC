@@ -64,6 +64,30 @@ def load_tracts():
     return tracts
 
 
+def load_council_districts() -> gpd.GeoDataFrame | None:
+    """City Council district polygons (data/nycc.geojson, NYC Open Data
+    dataset 872g-cjhh). Optional input: returns None with a warning when the
+    file is absent so the pipeline stays runnable without it."""
+    path = DATA_DIR / "nycc.geojson"
+    if not path.exists():
+        print(f"[warn] {path} missing — council districts will not be joined.\n"
+              "       Download: https://data.cityofnewyork.us/resource/872g-cjhh.geojson")
+        return None
+    districts = gpd.read_file(path)
+    col = next(
+        (c for c in districts.columns if c.lower() in ("coundist", "coun_dist")), None
+    )
+    if col is None:
+        raise ValueError(f"no district-number column in {path}: {list(districts.columns)}")
+    districts = districts.rename(columns={col: "council_district"})[
+        ["council_district", "geometry"]
+    ]
+    districts["council_district"] = districts["council_district"].astype(int)
+    if districts.crs and districts.crs.to_epsg() != 4326:
+        districts = districts.to_crs(epsg=4326)
+    return districts
+
+
 def load_311(path) -> gpd.GeoDataFrame:
     norm_to_orig = _sniff_columns(path)
 

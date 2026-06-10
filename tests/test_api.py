@@ -76,6 +76,64 @@ def test_watchlist_borough_filter(client):
     assert rows and all(row["borough"] == "Bronx" for row in rows)
 
 
+def test_districts_endpoint(client):
+    districts = client.get("/api/districts").json()
+    if not districts:
+        pytest.skip("bundle predates council districts; run `make patch-districts`")
+    assert districts == sorted(districts)
+    assert all(isinstance(d, int) for d in districts)
+    assert len(districts) == 51
+
+
+def test_council_district_in_rows(client):
+    if not client.get("/api/districts").json():
+        pytest.skip("bundle predates council districts; run `make patch-districts`")
+    row = client.get("/api/watchlist", params={"n": 1}).json()[0]
+    assert isinstance(row["council_district"], int)
+    detail = client.get(f"/api/tract/{row['geoid']}").json()
+    assert detail["council_district"] == row["council_district"]
+
+
+def test_watchlist_district_filter(client):
+    districts = client.get("/api/districts").json()
+    if not districts:
+        pytest.skip("bundle predates council districts; run `make patch-districts`")
+    rows = client.get(
+        "/api/watchlist", params={"district": districts[0], "n": 50}
+    ).json()
+    assert rows and all(r["council_district"] == districts[0] for r in rows)
+
+
+def test_watchlist_richer_columns(client):
+    row = client.get("/api/watchlist", params={"n": 1}).json()[0]
+    assert "predicted_risk" in row and "median_income" in row
+
+
+def test_watchlist_groups(client):
+    for by in ("neighborhood", "council_district"):
+        rows = client.get(
+            "/api/watchlist/groups", params={"by": by, "n": 10, "min_tracts": 2}
+        ).json()
+        if by == "council_district" and not rows:
+            pytest.skip("bundle predates council districts")
+        assert rows
+        means = [r["mean_residual"] for r in rows]
+        assert means == sorted(means, reverse=True)  # neglect = descending
+        assert all(r["tract_count"] >= 2 for r in rows)
+        assert all(r["group_by"] == by for r in rows)
+
+
+def test_tract_interpretation(client):
+    # The top neglect tract is far outside the noise floor, so the
+    # interpretation should name a driving component.
+    top = client.get("/api/watchlist", params={"n": 1}).json()[0]
+    detail = client.get(f"/api/tract/{top['geoid']}").json()
+    assert detail["interpretation"]
+    assert "vs. demographic prediction" in detail["interpretation"]
+    if abs(detail["risk_residual"]) >= 10:
+        assert "driver" in detail["interpretation"] or "metric" in detail["interpretation"]
+
+
 def test_correlations(client):
     rows = client.get("/api/correlations").json()
     assert rows

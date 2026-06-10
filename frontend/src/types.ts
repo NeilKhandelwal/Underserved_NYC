@@ -4,8 +4,26 @@ export interface TractSummary {
   geoid: string;
   neighborhood: string | null;
   borough: string | null;
+  council_district: number | null;
   risk_score: number | null;
   risk_residual: number | null;
+}
+
+export interface WatchlistRow extends TractSummary {
+  predicted_risk: number | null;
+  median_income: number | null;
+}
+
+export interface WatchlistGroupRow {
+  key: string;
+  group_by: "neighborhood" | "council_district";
+  borough: string | null;
+  tract_count: number;
+  mean_residual: number;
+  mean_risk: number | null;
+  top_geoid: string;
+  top_neighborhood: string | null;
+  top_residual: number;
 }
 
 export interface MetricComparison {
@@ -21,6 +39,7 @@ export interface MetricComparison {
 export interface TractDetail extends TractSummary {
   predicted_risk: number | null;
   band: "high" | "elevated" | "low";
+  interpretation: string | null;
   metrics: MetricComparison[];
   properties: Record<string, number | string | null>;
 }

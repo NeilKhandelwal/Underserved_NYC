@@ -1,5 +1,5 @@
 import geopandas as gpd
-from pipeline.load_and_clean import load_tracts, load_311, load_hpd, load_vacate_orders, load_acs, load_pluto, DATA_DIR, PROJECT_ROOT
+from pipeline.load_and_clean import load_tracts, load_311, load_hpd, load_vacate_orders, load_acs, load_pluto, load_council_districts, DATA_DIR, PROJECT_ROOT
 from pipeline.spatial_join import join_311_to_tracts, join_hpd_to_tracts, join_vacate_to_tracts, join_pluto_to_tracts
 from pipeline.aggregate import aggregate
 from pipeline.regression import run_rank_composite
@@ -16,9 +16,27 @@ def compute_scores(tract_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return df
 
 
+def join_council_districts(tract_df: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Tag each tract with its City Council district (representative-point
+    within join). No-op with a warning when data/nycc.geojson is absent."""
+    districts = load_council_districts()
+    if districts is None:
+        return tract_df
+    points = tract_df.copy()
+    points["geometry"] = points.geometry.representative_point()
+    joined = gpd.sjoin(points, districts, how="left", predicate="within")
+    tract_df = tract_df.copy()
+    # Float (not Int64) so the GeoJSON driver handles unmatched tracts as null;
+    # the API layer coerces back to int.
+    tract_df["council_district"] = joined["council_district"].astype(float).values
+    n_missing = int(tract_df["council_district"].isna().sum())
+    print(f"Joined council districts ({n_missing} tracts unmatched)")
+    return tract_df
+
+
 def export_geojson(tract_df: gpd.GeoDataFrame, path: str = OUTPUT_PATH):
     display_cols = [
-        "GEOID", "borough", "neighborhood", "geometry", "risk_score",
+        "GEOID", "borough", "neighborhood", "council_district", "geometry", "risk_score",
         "avg_closure_time", "avg_closure_ratio", "avg_closure_time_adjusted",
         "complaint_rate", "complaint_rate_adjusted",
         "violation_rate",
@@ -51,4 +69,5 @@ if __name__ == "__main__":
     )
 
     scored_df = compute_scores(tract_df)
+    scored_df = join_council_districts(scored_df)
     export_geojson(scored_df)

@@ -5,8 +5,9 @@ import type {
   PredictResponse,
   ScatterResponse,
   TractDetail,
-  TractSummary,
   WatchlistDirection,
+  WatchlistGroupRow,
+  WatchlistRow,
 } from "./types";
 
 async function getJSON<T>(url: string): Promise<T> {
@@ -25,7 +26,18 @@ export const api = {
   watchlist: (direction: WatchlistDirection, boroughs: string[], n: number) => {
     const params = new URLSearchParams({ direction, n: String(n) });
     for (const b of boroughs) params.append("borough", b);
-    return getJSON<TractSummary[]>(`/api/watchlist?${params}`);
+    return getJSON<WatchlistRow[]>(`/api/watchlist?${params}`);
+  },
+
+  watchlistGroups: (
+    by: "neighborhood" | "council_district",
+    direction: WatchlistDirection,
+    boroughs: string[],
+    n: number,
+  ) => {
+    const params = new URLSearchParams({ by, direction, n: String(n) });
+    for (const b of boroughs) params.append("borough", b);
+    return getJSON<WatchlistGroupRow[]>(`/api/watchlist/groups?${params}`);
   },
 
   predict: async (inputs: Record<string, number>): Promise<PredictResponse> => {

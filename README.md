@@ -61,7 +61,7 @@ The **build/serve split** is the key design decision:
 
 ```bash
 # Build & run locally
-docker build -t underserved-nyc .
+docker buildx build -t underserved-nyc .
 docker run -p 8080:8080 underserved-nyc
 # → http://localhost:8080/healthz
 
@@ -87,6 +87,7 @@ The multi-stage `Dockerfile`:
 | `make lint` | ruff check |
 | `make frontend-build` | TypeScript + Vite production build |
 | `make serving-bundle` | Regenerate serving/ from output/ |
+| `make patch-districts` | Join council districts onto output/master.geojson (no pipeline re-run) |
 | `make artifacts` | Full pipeline rebuild (~15 min, needs data/) |
 
 ---
@@ -101,6 +102,7 @@ The multi-stage `Dockerfile`:
 | ACS 2022 5-Year Estimates | Demographics + denominators (14 variables) |
 | NYC 2020 Census Tract Boundaries | Spatial unit of analysis |
 | NYC PLUTO | Building-stock features (year built, rent stabilization proxy) |
+| [NYC City Council Districts](https://data.cityofnewyork.us/resource/872g-cjhh.geojson) (`data/nycc.geojson`) | District tagging for the Watchlist / detail panel (`make patch-districts`) |
 
 ---
 

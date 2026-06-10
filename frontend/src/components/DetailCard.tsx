@@ -56,7 +56,10 @@ export function DetailCard({ geoid, onClose }: { geoid: string; onClose: () => v
       {detail && (
         <>
           <div className="tract-name">{detail.neighborhood ?? "Unknown"}</div>
-          <div className="tract-boro">{detail.borough}</div>
+          <div className="tract-boro">
+            {detail.borough}
+            {detail.council_district != null && ` · District ${detail.council_district}`}
+          </div>
           <div className="tract-id">Tract {detail.geoid}</div>
 
           <div className="score-big">
@@ -66,10 +69,9 @@ export function DetailCard({ geoid, onClose }: { geoid: string; onClose: () => v
             <div className="l">Underservice Risk Score</div>
           </div>
 
-          {detail.risk_residual != null && (
+          {detail.interpretation && (
             <div className="legend-note" style={{ textAlign: "center", marginTop: 0 }}>
-              Residual {detail.risk_residual >= 0 ? "+" : ""}
-              {detail.risk_residual.toFixed(1)} vs. demographic prediction
+              {detail.interpretation}
             </div>
           )}
 

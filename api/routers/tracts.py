@@ -18,11 +18,18 @@ def list_tracts(store: DataStore = Depends(get_store)):
             "geoid": str(t.get("GEOID")),
             "neighborhood": t.get("neighborhood"),
             "borough": t.get("borough"),
+            "council_district": t.get("council_district"),
             "risk_score": t.get("risk_score"),
             "risk_residual": t.get("risk_residual"),
         }
         for t in store.tracts.values()
     ]
+
+
+@router.get("/districts", response_model=list[int])
+def list_districts(store: DataStore = Depends(get_store)):
+    """Sorted distinct City Council district numbers present in the data."""
+    return store.districts()
 
 
 @router.get("/tract/{geoid}", response_model=TractDetail)

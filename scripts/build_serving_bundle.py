@@ -37,7 +37,10 @@ MODEL_PATH = OUTPUT_DIR / "demographic_model.joblib"
 MODEL_META_PATH = OUTPUT_DIR / "demographic_model.json"
 
 # Identity / label / non-metric columns excluded from numeric summary stats.
-ID_COLS = {"GEOID", "borough", "neighborhood", "centroid_lon", "centroid_lat"}
+ID_COLS = {
+    "GEOID", "borough", "neighborhood", "centroid_lon", "centroid_lat",
+    "council_district",
+}
 
 
 def _is_number(v: object) -> bool:

@@ -5,7 +5,7 @@ PY  := .venv/bin/python
 PIP := .venv/bin/pip
 
 .DEFAULT_GOAL := help
-.PHONY: help install install-pipeline install-api install-dev artifacts serving-bundle validate app api test lint frontend-install frontend-dev frontend-build clean
+.PHONY: help install install-pipeline install-api install-dev artifacts serving-bundle patch-districts validate app api test lint frontend-install frontend-dev frontend-build clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -29,6 +29,9 @@ artifacts: ## Rebuild master.geojson + model from raw data (needs data/, ~5-15 m
 
 serving-bundle: ## Build the deployable serving/ bundle from existing artifacts (fast)
 	$(PY) scripts/build_serving_bundle.py
+
+patch-districts: ## Join City Council districts onto output/master.geojson (needs data/nycc.geojson)
+	$(PY) scripts/patch_council_districts.py
 
 validate: ## Run the statistical validation suite
 	$(PY) -m validation.run_all

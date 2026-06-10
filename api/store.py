@@ -63,6 +63,13 @@ class DataStore:
         vals = {t.get("borough") for t in self.tracts.values() if t.get("borough")}
         return sorted(vals)
 
+    def districts(self) -> list[int]:
+        vals = {
+            int(t["council_district"]) for t in self.tracts.values()
+            if t.get("council_district") is not None
+        }
+        return sorted(vals)
+
     def _compute_correlations(self) -> list[dict]:
         """Pearson r between each overlay column and risk_score (ported from
         app.correlation_with_risk), sorted by |r| descending."""

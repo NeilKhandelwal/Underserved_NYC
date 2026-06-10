@@ -17,6 +17,7 @@ class TractSummary(BaseModel):
     geoid: str
     neighborhood: str | None
     borough: str | None
+    council_district: int | None = None
     risk_score: float | None
     risk_residual: float | None = None
 
@@ -24,12 +25,26 @@ class TractSummary(BaseModel):
 class TractDetail(TractSummary):
     predicted_risk: float | None = None
     band: str  # "high" | "elevated" | "low"
+    interpretation: str | None = None
     metrics: list[MetricComparison]
     properties: dict  # full per-tract record (public-API escape hatch)
 
 
 class WatchlistRow(TractSummary):
-    pass
+    predicted_risk: float | None = None
+    median_income: float | None = None
+
+
+class WatchlistGroupRow(BaseModel):
+    key: str                    # neighborhood name or "District 17"
+    group_by: str               # "neighborhood" | "council_district"
+    borough: str | None
+    tract_count: int
+    mean_residual: float
+    mean_risk: float | None
+    top_geoid: str
+    top_neighborhood: str | None
+    top_residual: float
 
 
 class Correlation(BaseModel):

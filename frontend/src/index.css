@@ -147,8 +147,37 @@ table.data td.num { font-variant-numeric: tabular-nums; text-align: right; }
 table.data tbody tr { cursor: pointer; }
 table.data tbody tr:hover { background: rgba(255, 255, 255, 0.04); }
 td.name { color: #fff; font-weight: 500; }
-td.pos { color: var(--red); }
-td.neg { color: var(--teal); }
+td.pos, span.pos { color: var(--red); }
+td.neg, span.neg { color: var(--teal); }
+
+/* ── Watchlist extras ── */
+td.chev { width: 28px; padding-right: 0; }
+.chev-btn {
+  background: none; border: none; color: var(--muted); font-size: 0.8rem;
+  padding: 2px 6px; border-radius: 4px;
+}
+.chev-btn:hover { color: var(--accent); background: rgba(244, 162, 97, 0.1); }
+td.barcell { width: 90px; }
+.resbar {
+  display: inline-block; width: 80px; height: 8px; border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06); overflow: hidden; vertical-align: middle;
+}
+.resbar > span { display: block; height: 100%; border-radius: 4px; }
+tr.drill { cursor: default; }
+tr.drill:hover { background: transparent; }
+tr.drill > td { background: var(--card-solid); border-radius: 8px; padding: 14px 16px; }
+.drill-headline { font-size: 0.88rem; color: var(--accent); margin-bottom: 10px; }
+.drill-metrics { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+.drill-metric {
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; min-width: 150px;
+}
+.drill-metric .l { font-size: 0.66rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.drill-metric .v { font-size: 1rem; font-weight: 700; color: #fff; }
+.drill-metric .r { font-size: 0.72rem; }
+.drill-metric .r.pos { color: var(--red); }
+.drill-metric .r.neg { color: var(--teal); }
+.drill-demo { font-size: 0.78rem; color: var(--muted); }
 
 /* ── Bar charts (correlations / importance) ── */
 .bars { display: flex; flex-direction: column; gap: 6px; }
@@ -231,6 +260,16 @@ td.neg { color: var(--teal); }
 .prose table { border-collapse: collapse; margin: 12px 0; font-size: 0.88rem; }
 .prose th, .prose td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; }
 .prose code { background: var(--card-solid); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+
+/* ── Ask placeholder ── */
+.ask-placeholder { max-width: 640px; margin: 8vh auto 0; text-align: left; }
+.ask-badge {
+  display: inline-block; font-size: 0.68rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent);
+  border: 1px solid rgba(244, 162, 97, 0.45); border-radius: 999px;
+  padding: 4px 12px; margin-bottom: 14px;
+}
+.ask-list { color: var(--muted); font-size: 0.9rem; line-height: 1.8; padding-left: 20px; }
 
 .loading { color: var(--muted); padding: 20px; font-size: 0.9rem; }
 .error { color: var(--red); padding: 20px; font-size: 0.9rem; }

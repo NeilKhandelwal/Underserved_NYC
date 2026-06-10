@@ -8,13 +8,15 @@ import { Watchlist } from "./components/Watchlist";
 import { Demographics } from "./components/Demographics";
 import { Predictor } from "./components/Predictor";
 import { Methodology } from "./components/Methodology";
+import { AskPlaceholder } from "./components/AskPlaceholder";
 
-type Tab = "map" | "watchlist" | "demographics" | "predictor" | "methodology";
+type Tab = "map" | "watchlist" | "demographics" | "predictor" | "ask" | "methodology";
 const TABS: { id: Tab; label: string }[] = [
   { id: "map", label: "Map" },
   { id: "watchlist", label: "Watchlist" },
   { id: "demographics", label: "Demographics" },
   { id: "predictor", label: "Predictor" },
+  { id: "ask", label: "Ask" },
   { id: "methodology", label: "Methodology" },
 ];
 
@@ -111,6 +113,11 @@ export function App() {
       {tab === "predictor" && (
         <div className="panel">
           <Predictor model={model} />
+        </div>
+      )}
+      {tab === "ask" && (
+        <div className="panel">
+          <AskPlaceholder />
         </div>
       )}
       {tab === "methodology" && (

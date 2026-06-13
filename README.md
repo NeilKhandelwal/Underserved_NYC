@@ -6,6 +6,80 @@ An interactive map and API that quantifies **municipal neglect** across every NY
 
 ---
 
+## What it does
+
+Most "where are the underserved neighborhoods?" maps just re-draw the poverty map — low-income, majority-minority areas score worst, which is real but unsurprising and not directly actionable. This project separates that **structural** pattern from the **institutional** one:
+
+1. It builds a 0–100 **Underservice Risk Score** for all ~2,200 NYC census tracts from housing-stress signals (311 closure times, HPD violations, vacate orders) — with confounds like complaint-filing bias and HPD triage *normalized away* before scoring.
+2. It trains a model to predict that score from demographics + building age, then takes the **residual** (actual − predicted). A high positive residual means a tract is getting worse service than even its demographics would predict — the part that points at the city, not the census.
+3. It exposes all of this as an explorable map, a ranked watchlist with per-tract explanations, and a small JSON API.
+
+The residuals still cluster geographically (Moran's I ≈ +0.19), which is consistent with *institutional* geography — neglect propagating along enforcement and political boundaries — rather than a missing demographic variable.
+
+> **What it is not:** this is a screening and prioritization tool, not proof of causation. A high residual is a place to *ask why*, not an indictment. See [Methodology](#methodology) and [MATH.md](MATH.md) for the limits.
+
+---
+
+## Project scope
+
+| In scope | Out of scope |
+|---|---|
+| Housing-service neglect (311 / HPD / vacate orders) | Non-housing services (sanitation, policing, schools) |
+| Census-tract granularity, citywide (all 5 boroughs) | Building- or address-level claims |
+| A 2024-present snapshot of the data | Longitudinal trend analysis |
+| Surfacing *where* service lags its prediction | Asserting *why* (causal attribution) |
+
+The audience is twofold: **civic-tech / policy** users who want to triage where to look, and engineers evaluating the project as an end-to-end build (data pipeline → ML → API → map UI → deploy).
+
+---
+
+## Features
+
+**Map** — A MapLibre choropleth of all tracts with switchable overlays: the risk score, the **unexplained-neglect residual** (diverging red/green), the model's predicted risk, and individual demographic layers (income, poverty, race, rent burden, …). A toggle overlays **City Council district** boundaries with district numbers; clicking any tract opens a detail card with its score, residual, district, and how its key metrics compare to the citywide average.
+
+**Watchlist** — A ranked table of residual outliers in three modes: *most unexplained neglect*, *unexpected success* (better-served than predicted), and *biggest surprises*. Each row expands into a **why-this-tract drilldown** — a plain-language headline (e.g. *"scores +18 points vs. demographic prediction; main driver: accountability gap 3.2× city average"*), the four risk components vs. citywide, and a demographics snapshot. A view toggle aggregates the same data by **neighborhood** or **council district** so it reads as "areas needing attention," not 2,200 individual rows.
+
+**Demographics** — Correlations between each demographic/building feature and the risk score, with an interactive scatterplot per feature to inspect the relationship directly.
+
+**Predictor** — A what-if panel: adjust demographic sliders and watch the Random Forest's predicted risk update live, to build intuition for what the model has learned.
+
+**Ask** *(coming soon)* — A planned assistant for "what policies or factors could explain this outlier?", grounded in the tool's own tract data, cited web search, and housing-policy documents.
+
+**API** — Everything the UI uses is a public JSON endpoint (see [API](#api)).
+
+---
+
+## How it works
+
+```
+data/ (16 GB, gitignored)
+  └─▶ pipeline/  ───▶ output/ (master.geojson, model.joblib, model.json)
+                          │
+                          └─▶ scripts/build_serving_bundle.py ──▶ serving/
+                                  (tracts.json, centroids, citywide_stats.json,
+                                   tracts.pmtiles via tippecanoe, model files)
+                                                   │
+                                                   ▼
+                                             api/ (FastAPI)
+                                              ├─ /api/{tract,tracts,watchlist,districts,
+                                              │   correlations,scatter,model,overlays,predict}
+                                              ├─ /healthz
+                                              ├─ /tiles  (StaticFiles — PMTiles + district overlay, Range-capable)
+                                              └─ /       (built SPA, mounted LAST)
+```
+
+Three stages:
+
+1. **Pipeline** (`pipeline/`, geopandas + scikit-learn) ingests the raw datasets, normalizes confounds, builds the composite risk score, trains the Random Forest, and computes cross-validated residuals → `output/`.
+2. **Serving-bundle build** (`scripts/build_serving_bundle.py`, **stdlib-only**) extracts only what the API needs — per-tract records, citywide stats, the model, and `tippecanoe` vector tiles — into a ~5 MB `serving/` bundle. Council districts are joined here too (`scripts/patch_council_districts.py`), without a pipeline re-run.
+3. **API + SPA** (`api/`, FastAPI + a Vite/React/MapLibre frontend) serves the bundle. The production image installs only `requirements-api.txt` — no geopandas, no raw data — so it stays small and fast.
+
+The **build/serve split** is the key design decision: the heavy, dependency-laden computation happens once, offline; the deployed container only reads pre-baked artifacts.
+
+For the full statistical methodology (every normalization, the model, and the validation suite), see **[MATH.md](MATH.md)**.
+
+---
+
 ## Quick Start
 
 ```bash
@@ -31,29 +105,23 @@ Open <http://localhost:5173>.
 
 ---
 
-## Architecture
+## API
 
-```
-data/ (16 GB, gitignored)
-  └─▶ pipeline/  ───▶ output/ (master.geojson, model.joblib, model.json)
-                          │
-                          └─▶ scripts/build_serving_bundle.py ──▶ serving/
-                                  (tracts.json, centroids, citywide_stats.json,
-                                   tracts.pmtiles via tippecanoe, model files)
-                                                   │
-                                                   ▼
-                                             api/ (FastAPI)
-                                              ├─ /api/{tract,tracts,watchlist,
-                                              │   correlations,model,overlays,predict}
-                                              ├─ /healthz
-                                              ├─ /tiles  (StaticFiles — PMTiles, Range-capable)
-                                              └─ /       (built SPA, mounted LAST)
-```
+All endpoints are under `/api` and return JSON.
 
-The **build/serve split** is the key design decision:
-- The **pipeline** (geopandas, libpysal, scikit-learn) produces `output/` from 16 GB of raw data.
-- `build_serving_bundle.py` (stdlib-only) extracts only what the API needs into a ~5 MB `serving/` bundle + vector tiles.
-- The **production image** installs only `requirements-api.txt` — no geopandas, no raw data.
+| Endpoint | Returns |
+|---|---|
+| `GET /api/tracts` | Lightweight list of every tract (id, name, borough, district, score, residual) |
+| `GET /api/tract/{geoid}` | Full detail: score, residual, band, metric-vs-city comparisons, interpretation |
+| `GET /api/watchlist` | Top residual outliers (`direction`, `borough`, `district`, `n`) |
+| `GET /api/watchlist/groups` | Watchlist aggregated `by=neighborhood\|council_district` |
+| `GET /api/districts` | Distinct City Council district numbers |
+| `GET /api/overlays` | Map overlay definitions + residual color bins |
+| `GET /api/correlations` | Pearson r of each feature vs. the risk score |
+| `GET /api/scatter/{feature}` | Per-tract points for a feature-vs-score scatterplot |
+| `GET /api/model` | Random Forest metadata (R², RMSE, feature importances, slider ranges) |
+| `POST /api/predict` | Predicted risk for a hypothetical tract from demographic inputs |
+| `GET /healthz` | Liveness + tract/model load status |
 
 ---
 
@@ -83,7 +151,7 @@ The multi-stage `Dockerfile`:
 |---------|---------|
 | `make api` | FastAPI on :8000 (auto-reload) |
 | `make frontend-dev` | Vite dev server on :5173 |
-| `make test` | pytest (11 API tests) |
+| `make test` | pytest (18 API tests) |
 | `make lint` | ruff check |
 | `make frontend-build` | TypeScript + Vite production build |
 | `make serving-bundle` | Regenerate serving/ from output/ |
@@ -102,7 +170,7 @@ The multi-stage `Dockerfile`:
 | ACS 2022 5-Year Estimates | Demographics + denominators (14 variables) |
 | NYC 2020 Census Tract Boundaries | Spatial unit of analysis |
 | NYC PLUTO | Building-stock features (year built, rent stabilization proxy) |
-| [NYC City Council Districts](https://data.cityofnewyork.us/resource/872g-cjhh.geojson) (`data/nycc.geojson`) | District tagging for the Watchlist / detail panel (`make patch-districts`) |
+| [NYC City Council Districts](https://data.cityofnewyork.us/resource/872g-cjhh.geojson) (`data/nycc.geojson`) | District tagging + map overlay (`make patch-districts`) |
 
 ---
 
@@ -114,11 +182,11 @@ The index decomposes underservice into two components:
 2. **Institutional (residual)** — tracts that receive worse service than *even the structural pattern predicts*. This is the actionable signal.
 
 Steps:
-1. Build a composite risk score from independent housing-stress signals (311 closure times, HPD violations, vacate orders).
+1. Build a composite risk score from independent housing-stress signals (311 closure times, HPD violations, vacate orders), normalizing complaint-type, income-filing bias, and HPD triage out first.
 2. Train a Random Forest baseline predicting risk from ACS demographics + PLUTO building stock.
 3. Compute the residual: actual risk − predicted risk. Positive residual = neglect that demographics alone don't explain.
 
-For full statistical methodology, see [MATH.md](MATH.md).
+A validation suite (temporal split, bootstrap CIs, weight-sensitivity, and Moran's I spatial autocorrelation) checks that the score is predictive and robust. For full statistical methodology, see [MATH.md](MATH.md).
 
 ---
 

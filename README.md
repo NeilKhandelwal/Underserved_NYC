@@ -1,6 +1,6 @@
 # NYC Underservice Risk Index
 
-An interactive map and API that quantifies **municipal neglect** across every NYC census tract — then surfaces the tracts where actual neglect *exceeds* what poverty, race, and demographics alone predict. That unexplained residual is the signal: it likely reflects agency routing decisions, inspection gaps, and political responsiveness rather than who lives there.
+An interactive map and API that quantifies **municipal neglect** across every NYC census tract. The map highlights the tracts where actual neglect **exceeds** what poverty, race, and demographics alone predict. That unexplained residual is the signal: it likely reflects agency routing decisions, inspection gaps, and political responsiveness rather than who lives there.
 
 **Live:** [underserved-nyc.fly.dev](https://underserved-nyc.fly.dev)
 
@@ -8,15 +8,15 @@ An interactive map and API that quantifies **municipal neglect** across every NY
 
 ## What it does
 
-Most "where are the underserved neighborhoods?" maps just re-draw the poverty map — low-income, majority-minority areas score worst, which is real but unsurprising and not directly actionable. This project separates that **structural** pattern from the **institutional** one:
+Most underserved neighborhood maps closely mirror demographics and poverty — low-income, majority-minority areas score worst, while significant it is not unsurprising and not directly and locally actionable. This project separates that **structural** pattern from the **institutional** one:
 
-1. It builds a 0–100 **Underservice Risk Score** for all ~2,200 NYC census tracts from housing-stress signals (311 closure times, HPD violations, vacate orders) — with confounds like complaint-filing bias and HPD triage *normalized away* before scoring.
-2. It trains a model to predict that score from demographics + building age, then takes the **residual** (actual − predicted). A high positive residual means a tract is getting worse service than even its demographics would predict — the part that points at the city, not the census.
+1. It builds a 0–100 **Underservice Risk Score** for all ~2,200 NYC census tracts from housing-stress signals (311 closure times, HPD violations, vacate orders) and normalized complaint-filing bias and HPD triage before scoring.
+2. It trains a random forest model to predict risk score from demographics + building age, then takes the **residual** (actual − predicted). A high positive residual means a tract is getting worse service than even its demographics would predict. 
 3. It exposes all of this as an explorable map, a ranked watchlist with per-tract explanations, and a small JSON API.
 
-The residuals still cluster geographically (Moran's I ≈ +0.19), which is consistent with *institutional* geography — neglect propagating along enforcement and political boundaries — rather than a missing demographic variable.
+The residuals still cluster geographically (Moran's I ≈ +0.19), which is consistent with institutional geography representing similar policy and structural attention.
 
-> **What it is not:** this is a screening and prioritization tool, not proof of causation. A high residual is a place to *ask why*, not an indictment. See [Methodology](#methodology) and [MATH.md](MATH.md) for the limits.
+> **What it is not:** this is a screening and prioritization tool, not proof of causation. A high residual calls for further investigation, not a verdict. See [Methodology](#methodology) and [MATH.md](MATH.md) for the limits.
 
 ---
 

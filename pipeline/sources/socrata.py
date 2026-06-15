@@ -49,10 +49,12 @@ def fetch(dataset: str, *, select: str, where: str, order: str,
           max_pages: int = 10000, cache: bool = True) -> pd.DataFrame:
     """Return the selected columns for all rows matching `where` (paged).
 
-    Cached to a parquet keyed by (dataset, select, where, order). Empty results
-    are returned but not cached (cheap to re-pull, and parquet needs a schema).
+    Cached to a parquet keyed by (dataset, select, where, order, page_size).
+    Empty results are returned but not cached (cheap to re-pull, and parquet
+    needs a schema).
     """
-    key = json.dumps({"select": select, "where": where, "order": order}, sort_keys=True)
+    key = json.dumps({"select": select, "where": where, "order": order,
+                      "page_size": page_size}, sort_keys=True)
     path = _cache_path(dataset, key)
     if cache and path.exists():
         return pd.read_parquet(path)

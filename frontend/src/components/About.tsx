@@ -9,21 +9,21 @@ export function AboutContent() {
       <h2>What this map shows</h2>
       <p className="sub">
         A neighborhood-level look at where New York City's housing services fall
-        short — and, more importantly, where they fall short by <i>more than the
-        neighborhood's income and demographics would lead you to expect</i>.
+        short. Mainly focusing on residuals, where service is worse than demographics
+        or income would suggest. 
       </p>
 
-      <h3>The problem with most "underserved" maps</h3>
+      <h3>The problem with most service maps</h3>
       <p>
-        Almost any map of housing problems in NYC ends up looking like a map of
+        Most maps of housing problems in NYC look like a map of
         poverty: lower-income, majority-minority neighborhoods score worst. That
-        is real, but it isn't news — and it doesn't tell a council member or
-        community board <i>where to look next</i>.
+        is real, but it isn't directly actionable — and it doesn't tell a council member or
+        community board <b>where to look next</b>.
       </p>
 
-      <h3>What we do differently</h3>
+      <h3>What UnderservedNYC does differently</h3>
       <p>
-        We separate two things that usually get blended together:
+        Separates two things that usually get blended together:
       </p>
       <ul>
         <li>
@@ -31,7 +31,7 @@ export function AboutContent() {
           neighborhoods tend to get slower, thinner housing services.
         </li>
         <li>
-          <b>The surprise</b> — neighborhoods getting <i>worse</i> service than
+          <b>The surprise</b> — neighborhoods getting <b>worse</b> service than
           even their income and demographics would predict. This is the part that
           usually points to how agencies route inspections, close complaints, and
           respond on the ground — not to who lives there.
@@ -54,7 +54,7 @@ export function AboutContent() {
         <li>Orders that declare buildings unsafe to live in (vacate orders)</li>
       </ul>
       <p>
-        We adjust these so that wealthier areas filing more complaints, or one
+        Values are adjusted these so that wealthier areas filing more complaints, or one
         slow complaint type, don't distort the picture.
       </p>
 

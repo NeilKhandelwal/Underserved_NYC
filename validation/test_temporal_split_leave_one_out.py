@@ -58,8 +58,8 @@ def run(cutoff_date: str = DEFAULT_CUTOFF) -> dict:
     with silence_stdout():
         tracts = load_tracts()
         acs = load_acs()
-        gdf_311 = load_311(DATA_DIR / "311_data.csv")
-        gdf_vacate = load_vacate_orders(DATA_DIR / "Order_To_Repair.csv")
+        gdf_311 = load_311()
+        gdf_vacate = load_vacate_orders()
 
     hpd_pre, hpd_post = _load_hpd_with_dates(
         DATA_DIR / "hpd_violations.csv", cutoff_date

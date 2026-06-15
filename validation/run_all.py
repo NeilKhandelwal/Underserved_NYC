@@ -9,7 +9,6 @@ Tests are ordered cheapest → most expensive so quick signals surface first.
 """
 import argparse
 import json
-import sys
 
 from validation.test_spatial_residuals import run as test_spatial
 from validation.test_temporal_split import run as test_temporal

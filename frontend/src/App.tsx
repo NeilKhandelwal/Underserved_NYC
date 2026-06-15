@@ -8,17 +8,22 @@ import { Watchlist } from "./components/Watchlist";
 import { Demographics } from "./components/Demographics";
 import { Predictor } from "./components/Predictor";
 import { Methodology } from "./components/Methodology";
+import { About } from "./components/About";
+import { AboutModal } from "./components/AboutModal";
 import { AskPlaceholder } from "./components/AskPlaceholder";
 
-type Tab = "map" | "watchlist" | "demographics" | "predictor" | "ask" | "methodology";
+type Tab = "map" | "watchlist" | "demographics" | "predictor" | "ask" | "about" | "methodology";
 const TABS: { id: Tab; label: string }[] = [
   { id: "map", label: "Map" },
   { id: "watchlist", label: "Watchlist" },
   { id: "demographics", label: "Demographics" },
   { id: "predictor", label: "Predictor" },
   { id: "ask", label: "Ask" },
+  { id: "about", label: "About" },
   { id: "methodology", label: "Methodology" },
 ];
+
+const ABOUT_SEEN_KEY = "underserved-nyc:about-seen";
 
 export function App() {
   const [overlaysResp, setOverlaysResp] = useState<OverlaysResponse | null>(null);
@@ -28,11 +33,30 @@ export function App() {
   const [showDistricts, setShowDistricts] = useState(false);
   const [flyTo, setFlyTo] = useState<{ lon: number; lat: number; key: number } | null>(null);
   const [tab, setTab] = useState<Tab>("map");
+  const [showAbout, setShowAbout] = useState(false);
 
   useEffect(() => {
     api.overlays().then(setOverlaysResp).catch(console.error);
     api.model().then(setModel).catch(console.error);
   }, []);
+
+  // Greet first-time visitors with the About modal; returning visitors aren't interrupted.
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(ABOUT_SEEN_KEY)) setShowAbout(true);
+    } catch {
+      setShowAbout(true);
+    }
+  }, []);
+
+  function dismissAbout() {
+    setShowAbout(false);
+    try {
+      localStorage.setItem(ABOUT_SEEN_KEY, "1");
+    } catch {
+      /* ignore (private mode, etc.) */
+    }
+  }
 
   const overlay: OverlayInfo | null = useMemo(() => {
     const list = overlaysResp?.overlays ?? [];
@@ -124,11 +148,18 @@ export function App() {
           <AskPlaceholder />
         </div>
       )}
+      {tab === "about" && (
+        <div className="panel">
+          <About />
+        </div>
+      )}
       {tab === "methodology" && (
         <div className="panel">
           <Methodology />
         </div>
       )}
+
+      {showAbout && <AboutModal onClose={dismissAbout} />}
     </div>
   );
 }

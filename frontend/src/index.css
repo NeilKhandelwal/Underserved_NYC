@@ -272,5 +272,42 @@ tr.drill > td { background: var(--card-solid); border-radius: 8px; padding: 14px
 }
 .ask-list { color: var(--muted); font-size: 0.9rem; line-height: 1.8; padding-left: 20px; }
 
+/* ── About welcome modal ── */
+.about-backdrop {
+  position: fixed; inset: 0; z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(6, 6, 12, 0.72);
+  backdrop-filter: blur(6px);
+  animation: about-fade 0.18s ease-out;
+}
+.about-modal {
+  position: relative; width: 100%; max-width: 640px; max-height: 88vh;
+  overflow-y: auto;
+  background: var(--card-solid); border: 1px solid var(--border);
+  border-radius: 16px; padding: 28px 32px 24px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  animation: about-rise 0.2s ease-out;
+}
+.about-modal .prose { max-width: none; }
+.about-modal .prose h2 { margin-top: 0; }
+.about-close {
+  position: absolute; top: 14px; right: 18px; background: none; border: none;
+  color: var(--muted); font-size: 1.5rem; line-height: 1;
+}
+.about-close:hover { color: #fff; }
+.about-actions { margin-top: 24px; }
+.about-cta {
+  background: var(--accent); color: #1a1208; border: none;
+  font-weight: 700; font-size: 0.9rem; letter-spacing: 0.02em;
+  padding: 10px 20px; border-radius: 8px;
+}
+.about-cta:hover { filter: brightness(1.08); }
+@keyframes about-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes about-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .loading { color: var(--muted); padding: 20px; font-size: 0.9rem; }
 .error { color: var(--red); padding: 20px; font-size: 0.9rem; }

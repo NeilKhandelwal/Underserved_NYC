@@ -51,11 +51,7 @@ from pipeline.load_and_clean import (
 )
 from pipeline.aggregate import aggregate
 from pipeline.regression import run_rank_composite
-from pipeline.spatial_join import (
-    join_311_to_tracts,
-    join_hpd_to_tracts,
-    join_vacate_to_tracts,
-)
+from pipeline.spatial_join import join_311_to_tracts, join_hpd_to_tracts
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 SOCRATA = "https://data.cityofnewyork.us/resource"
@@ -78,19 +74,23 @@ def quiet():
 
 
 def socrata_fetch(dataset: str, select: str, where: str, *, order: str,
-                  app_token: str | None, max_pages: int, page: int = 50000) -> pd.DataFrame:
-    """Paged Socrata pull. Returns a DataFrame of the selected columns."""
+                  app_token: str | None, max_pages: int, page_size: int = 50000) -> pd.DataFrame:
+    """Paged Socrata pull. Returns a DataFrame of the selected columns.
+
+    Note: no retry/backoff yet — a single HTTP 429 aborts the run. Production
+    should add backoff (see the rate-limit risk in docs/longitudinal-design.md).
+    """
     rows: list[dict] = []
     headers = {"X-App-Token": app_token} if app_token else {}
     for i in range(max_pages):
         params = {"$select": select, "$where": where, "$order": order,
-                  "$limit": page, "$offset": i * page}
+                  "$limit": page_size, "$offset": i * page_size}
         r = requests.get(f"{SOCRATA}/{dataset}.json", params=params,
                          headers=headers, timeout=120)
         r.raise_for_status()
         batch = r.json()
         rows.extend(batch)
-        if len(batch) < page:
+        if len(batch) < page_size:
             break
     return pd.DataFrame(rows)
 
@@ -101,9 +101,13 @@ def fetch_311(boro: str, start: str, end: str, **kw) -> pd.DataFrame:
              f"AND borough = '{BORO_311[boro]}' AND complaint_type in ({types})")
     df = socrata_fetch(
         DATASET_311,
-        select="unique_key,complaint_type,created_date,closed_date,latitude,longitude",
+        select=("unique_key,complaint_type,created_date,closed_date,"
+                "resolution_description,latitude,longitude"),
         where=where, order="created_date", **kw,
     )
+    # Parse the datetimes once for the whole span (the per-quarter prep only slices).
+    df["created"] = pd.to_datetime(df["created_date"], errors="coerce")
+    df["closed"] = pd.to_datetime(df["closed_date"], errors="coerce")
     print(f"  311:   fetched {len(df):,} rows")
     return df
 
@@ -115,6 +119,7 @@ def fetch_hpd(boro: str, start: str, end: str, **kw) -> pd.DataFrame:
         DATASET_HPD, select="class,inspectiondate,boroid,block,lot",
         where=where, order="inspectiondate", **kw,
     )
+    df["inspected"] = pd.to_datetime(df["inspectiondate"], errors="coerce")
     print(f"  HPD:   fetched {len(df):,} rows")
     return df
 
@@ -148,7 +153,8 @@ def acs_from_bundle() -> pd.DataFrame:
     path = PROJECT_ROOT / "serving" / "data" / "tracts.json"
     if not path.exists():
         sys.exit(f"{path} missing — run `make serving-bundle` first.")
-    records = json.load(open(path))
+    with open(path) as f:
+        records = json.load(f)
     rows = [{"GEOID": str(g), **{c: r.get(c) for c in ACS_COLS}}
             for g, r in records.items()]
     return pd.DataFrame(rows)
@@ -172,23 +178,33 @@ def points_gdf(df: pd.DataFrame, lat_col: str, lon_col: str) -> gpd.GeoDataFrame
 
 
 def prep_311_quarter(df_311: pd.DataFrame, start: str, end: str) -> gpd.GeoDataFrame:
-    """Slice to the quarter and reproduce load_311's closure-time contract."""
-    df = df_311.copy()
-    df["created"] = pd.to_datetime(df["created_date"], errors="coerce")
-    df["closed"] = pd.to_datetime(df["closed_date"], errors="coerce")
-    df = df[(df["created"] >= start) & (df["created"] < end)]
+    """Slice to the quarter and reproduce load_311's record contract: a positive
+    closure time (>= 0.04 days) and the auto-close filter that drops records whose
+    resolution_description marks no action / an automatic close
+    (mirrors pipeline/load_and_clean.py load_311). `created`/`closed` are pre-parsed
+    in fetch_311, so this only slices and filters."""
+    df = df_311[(df_311["created"] >= start) & (df_311["created"] < end)].copy()
     df["closure_time_days"] = (df["closed"] - df["created"]).dt.total_seconds() / 86400
     df = df.dropna(subset=["closure_time_days", "complaint_type"])
     df = df[df["closure_time_days"] >= 0.04]
+    # Auto-close filter — same as load_311: drop "no action" / auto-closed records,
+    # which would otherwise inflate complaint_count -> accountability_gap (0.40 weight).
+    # (In practice a no-op on 2024 HPD-routed housing 311s, whose resolutions never
+    # use this phrasing — kept for fidelity to the loader contract.)
+    if "resolution_description" in df.columns:
+        auto_close = df["resolution_description"].str.upper().str.contains(
+            "NO ACTION|AUTO-CLOSE|AUTOMATICALLY CLOSED", na=False
+        )
+        df = df[~auto_close]
     return points_gdf(df[["complaint_type", "closure_time_days", "latitude", "longitude"]],
                       "latitude", "longitude")
 
 
 def prep_hpd_quarter(df_hpd: pd.DataFrame, bbl_map: dict, start: str, end: str) -> gpd.GeoDataFrame:
     """Slice to the quarter, build BBL, geocode via PLUTO, return points."""
-    df = df_hpd.copy()
-    df["inspected"] = pd.to_datetime(df["inspectiondate"], errors="coerce")
-    df = df[(df["inspected"] >= start) & (df["inspected"] < end)].dropna(subset=["inspected"])
+    # `inspected` is pre-parsed in fetch_hpd; here we only slice to the quarter.
+    df = df_hpd[(df_hpd["inspected"] >= start) & (df_hpd["inspected"] < end)].copy()
+    df = df.dropna(subset=["inspected"])
 
     lats, lons = [], []
     for boroid, block, lot in df[["boroid", "block", "lot"]].itertuples(index=False):
@@ -248,8 +264,8 @@ def main() -> None:
                   "(raise --max-pages or widen the window).")
             continue
         with quiet():
-            gvac = join_vacate_to_tracts(empty_vacate, tracts) if len(empty_vacate) else empty_vacate
-            tract_df = aggregate(tracts, g311, ghpd, gvac, acs).reset_index(drop=True)
+            # Vacate held empty (rare; aggregate fills NaN -> 0). See module docstring.
+            tract_df = aggregate(tracts, g311, ghpd, empty_vacate, acs).reset_index(drop=True)
             scores, _ = run_rank_composite(tract_df)
             tract_df.loc[scores.index, "risk_score"] = scores
         scored = tract_df.dropna(subset=["risk_score"])

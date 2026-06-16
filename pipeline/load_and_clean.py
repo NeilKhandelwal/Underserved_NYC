@@ -116,7 +116,7 @@ def load_311(start: str = DEFAULT_START, end: str | None = DEFAULT_END,
         where += f" AND created_date < '{end}'"
     where += f" AND complaint_type in ({socrata.in_list(sorted(HOUSING_COMPLAINT_TYPES))})"
     if borough:
-        where += f" AND borough = '{borough.upper()}'"
+        where += f" AND borough in ({socrata.in_list([borough.upper()])})"
     df = socrata.fetch(
         DATASET_311,
         select=("unique_key,complaint_type,created_date,closed_date,"

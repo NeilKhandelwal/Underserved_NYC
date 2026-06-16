@@ -164,7 +164,7 @@ def load_hpd(start: str = DEFAULT_START, end: str | None = DEFAULT_END,
     if end:
         where += f" AND inspectiondate < '{end}'"
     if borough:
-        where += f" AND boro = '{borough.upper()}'"
+        where += f" AND boro in ({socrata.in_list([borough.upper()])})"
     df = socrata.fetch(
         DATASET_HPD, select="class,inspectiondate,boroid,block,lot",
         where=where, order="inspectiondate", app_token=SOCRATA_APP_TOKEN,

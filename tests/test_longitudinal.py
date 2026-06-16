@@ -92,6 +92,49 @@ def test_assemble_omits_residual_and_unpredicted_tracts():
     assert series2["A"]["risk_residual"] == [None]
 
 
+def test_assemble_raises_on_duplicate_geoid():
+    # aggregate() yields one row per tract; a duplicate GEOID is an upstream
+    # contract break and should fail loudly, not silently mis-pivot.
+    dup = pd.concat([_scored({"A": 1.0}), _scored({"A": 2.0})], ignore_index=True)
+    with pytest.raises(ValueError):
+        lg._assemble(["2024Q1"], {"2024Q1": dup}, predicted={}, with_residual=False)
+
+
+# ── Demographic baseline model (real train + predict path) ───────────────────
+
+def test_baseline_predictions_trains_and_maps(monkeypatch):
+    """Exercise the actual cross_val_predict / feature-intersection / GEOID-map
+    path with synthetic score_period output (no Socrata, no geopandas)."""
+    from pipeline.demographic_analysis import DEMOGRAPHIC_FEATURES
+
+    # Drop one feature column to exercise the `c in base.columns` intersection.
+    feats_present = DEMOGRAPHIC_FEATURES[:-1]
+    n = 25  # comfortably above cv=5
+    base = pd.DataFrame([
+        {"GEOID": f"360050{i:05d}", "risk_score": float(i),
+         "ignored_non_feature": 1.0,
+         **{f: float(i + j) for j, f in enumerate(feats_present)}}
+        for i in range(n)
+    ])
+    # One tract with a NaN demographic feature must drop out (no prediction).
+    nan_geoid = base.loc[0, "GEOID"]
+    base.loc[0, feats_present[0]] = float("nan")
+
+    monkeypatch.setattr(lg, "score_period", lambda *a, **k: base)
+    periods = [("2024Q1", "2024-01-01", "2024-04-01"),
+               ("2024Q2", "2024-04-01", "2024-07-01")]
+
+    preds = lg._baseline_predictions(None, None, None, periods,
+                                     borough=None, verbose=False)
+
+    assert nan_geoid not in preds            # NaN-feature tract excluded
+    assert len(preds) == n - 1
+    assert all(isinstance(k, str) for k in preds)
+    assert all(isinstance(v, float) for v in preds.values())
+    # Predictions are within the training target's range (0..n-1), sanity check.
+    assert all(0.0 <= v <= float(n - 1) for v in preds.values())
+
+
 # ── End-to-end loop with the scoring step stubbed ────────────────────────────
 
 def test_build_timeseries_stubbed(monkeypatch):

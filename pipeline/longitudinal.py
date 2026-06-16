@@ -203,8 +203,22 @@ def _assemble(quarter_labels: list[str], scored: dict[str, pd.DataFrame],
     """Pivot per-quarter scored frames into the GEOID-keyed time-series schema.
 
     Every metric array is aligned to `quarter_labels` and null-padded where the
-    tract had no score that quarter. Tracts scored in zero quarters are omitted."""
-    by_q = {q: df.set_index(df["GEOID"].astype(str)) for q, df in scored.items()}
+    tract had no score that quarter. Tracts scored in zero quarters are omitted.
+
+    aggregate() yields one row per tract, so GEOID is expected unique within a
+    quarter. We check that explicitly and fail loudly on a duplicate (an upstream
+    contract break) rather than letting df.loc[g] later return a DataFrame and
+    raise a cryptic TypeError in the float() conversion."""
+    by_q: dict[str, pd.DataFrame] = {}
+    for q, df in scored.items():
+        indexed = df.assign(GEOID=df["GEOID"].astype(str)).set_index("GEOID")
+        if not indexed.index.is_unique:
+            dupes = indexed.index[indexed.index.duplicated()].unique().tolist()
+            raise ValueError(
+                f"{q}: duplicate GEOID rows in scored frame {dupes[:5]} — "
+                "aggregate() is expected to yield one row per tract"
+            )
+        by_q[q] = indexed
     geoids = sorted({g for df in by_q.values() for g in df.index})
 
     def cell(row, col: str, ndigits: int):

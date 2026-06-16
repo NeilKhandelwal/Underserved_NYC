@@ -87,7 +87,8 @@ def _quiet(verbose: bool):
     if verbose:
         yield
     else:
-        with contextlib.redirect_stdout(io.StringIO()):
+        with contextlib.redirect_stdout(io.StringIO()), \
+             contextlib.redirect_stderr(io.StringIO()):
             yield
 
 

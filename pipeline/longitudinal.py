@@ -179,6 +179,11 @@ def _baseline_predictions(tracts, acs, joined_pluto, periods, *,
                         borough=borough, verbose=verbose)
 
     feats = [c for c in DEMOGRAPHIC_FEATURES if c in base.columns]
+    if not feats:
+        raise RuntimeError(
+            "No DEMOGRAPHIC_FEATURES found in baseline columns; "
+            f"available: {list(base.columns)}"
+        )
     data = base[["GEOID", "risk_score"] + feats].dropna()
     model = RandomForestRegressor(
         n_estimators=300, min_samples_leaf=3, random_state=42, n_jobs=-1

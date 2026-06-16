@@ -2,7 +2,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-from pipeline.load_and_clean import load_tracts, load_311, load_hpd, load_vacate_orders, load_acs, load_pluto, DATA_DIR
+from pipeline.load_and_clean import load_tracts, load_311, load_hpd, load_vacate_orders, load_acs, load_pluto
 from pipeline.spatial_join import join_311_to_tracts, join_hpd_to_tracts, join_vacate_to_tracts, join_pluto_to_tracts
 
 
@@ -205,9 +205,9 @@ def aggregate(tracts: gpd.GeoDataFrame, joined_311: gpd.GeoDataFrame,
 
 if __name__ == "__main__":
     tracts = load_tracts()
-    gdf_311 = load_311(DATA_DIR / "311_data.csv")
-    gdf_hpd = load_hpd(DATA_DIR / "hpd_violations.csv")
-    gdf_vacate = load_vacate_orders(DATA_DIR / "Order_To_Repair.csv")
+    gdf_311 = load_311()
+    gdf_hpd = load_hpd()
+    gdf_vacate = load_vacate_orders()
     gdf_pluto = load_pluto()
     acs = load_acs()
 

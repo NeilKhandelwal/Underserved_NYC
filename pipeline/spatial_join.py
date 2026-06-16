@@ -1,5 +1,5 @@
 import geopandas as gpd
-from pipeline.load_and_clean import load_tracts, load_311, load_hpd, DATA_DIR
+from pipeline.load_and_clean import load_tracts, load_311, load_hpd
 
 
 def join_311_to_tracts(gdf_311: gpd.GeoDataFrame, tracts: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
@@ -40,8 +40,8 @@ def join_pluto_to_tracts(
 
 if __name__ == "__main__":
     tracts = load_tracts()
-    gdf_311 = load_311(DATA_DIR / "311_data.csv")
-    gdf_hpd = load_hpd(DATA_DIR / "hpd_violations.csv")
+    gdf_311 = load_311()
+    gdf_hpd = load_hpd()
 
     joined_311 = join_311_to_tracts(gdf_311, tracts)
     joined_hpd = join_hpd_to_tracts(gdf_hpd, tracts)

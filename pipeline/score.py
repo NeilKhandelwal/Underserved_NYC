@@ -1,5 +1,5 @@
 import geopandas as gpd
-from pipeline.load_and_clean import load_tracts, load_311, load_hpd, load_vacate_orders, load_acs, load_pluto, load_council_districts, DATA_DIR, PROJECT_ROOT
+from pipeline.load_and_clean import load_tracts, load_311, load_hpd, load_vacate_orders, load_acs, load_pluto, load_council_districts, PROJECT_ROOT
 from pipeline.spatial_join import join_311_to_tracts, join_hpd_to_tracts, join_vacate_to_tracts, join_pluto_to_tracts
 from pipeline.aggregate import aggregate
 from pipeline.regression import run_rank_composite
@@ -54,9 +54,9 @@ def export_geojson(tract_df: gpd.GeoDataFrame, path: str = OUTPUT_PATH):
 
 if __name__ == "__main__":
     tracts = load_tracts()
-    gdf_311 = load_311(DATA_DIR / "311_data.csv")
-    gdf_hpd = load_hpd(DATA_DIR / "hpd_violations.csv")
-    gdf_vacate = load_vacate_orders(DATA_DIR / "Order_To_Repair.csv")
+    gdf_311 = load_311()
+    gdf_hpd = load_hpd()
+    gdf_vacate = load_vacate_orders()
     gdf_pluto = load_pluto()
     acs = load_acs()
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class MetricComparison(BaseModel):
@@ -45,6 +45,22 @@ class TractTimeSeries(BaseModel):
     weighted_violation_rate: list[float | None]
     avg_closure_time_adjusted: list[float | None]
     vacate_rate: list[float | None]
+
+    @model_validator(mode="after")
+    def _aligned_to_quarters(self) -> "TractTimeSeries":
+        """Every per-quarter list must be index-aligned to ``quarters``. Catches a
+        truncated/misaligned field at the API boundary rather than letting the
+        sparkline render silently wrong data."""
+        n = len(self.quarters)
+        for name in ("risk_score", "risk_residual", "accountability_gap",
+                     "weighted_violation_rate", "avg_closure_time_adjusted",
+                     "vacate_rate"):
+            values = getattr(self, name)
+            if values is not None and len(values) != n:
+                raise ValueError(
+                    f"{name} has {len(values)} entries but quarters has {n}"
+                )
+        return self
 
 
 class WatchlistRow(TractSummary):

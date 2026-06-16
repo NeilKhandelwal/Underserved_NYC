@@ -90,6 +90,52 @@ def test_tract_timeseries_404(client):
     assert client.get("/api/tract/00000000000/timeseries").status_code == 404
 
 
+def test_timeseries_schema_rejects_misaligned_lists():
+    """A per-quarter list whose length differs from quarters is a contract break
+    (e.g. a truncated pipeline write) and must fail validation, not pass through."""
+    from pydantic import ValidationError
+
+    from api.schemas import TractTimeSeries
+
+    aligned = dict(
+        geoid="36005000100",
+        quarters=["2024Q1", "2024Q2"],
+        risk_score=[40.0, 55.0],
+        accountability_gap=[0.1, 0.2],
+        weighted_violation_rate=[0.3, 0.4],
+        avg_closure_time_adjusted=[12.0, 9.0],
+        vacate_rate=[0.0, 0.0],
+    )
+    TractTimeSeries(**aligned)  # well-formed: no error
+
+    with pytest.raises(ValidationError):
+        TractTimeSeries(**{**aligned, "risk_score": [40.0]})  # too short
+
+
+def test_reload_without_timeseries_clears_stale_series(tmp_path):
+    """Regression: a second load() from a bundle lacking timeseries.json must
+    clear series carried over from a previous load (every other store field is
+    reassigned unconditionally — timeseries must be too)."""
+    import shutil
+
+    from api.config import get_settings
+    from api.store import DataStore
+
+    real = get_settings().serving_dir
+    if not (real / "tracts.json").exists():
+        pytest.skip("serving bundle missing; run `make serving-bundle`")
+    # Mirror the real bundle's required artifacts into a temp dir WITHOUT
+    # timeseries.json, so the reload sees a bundle that has none.
+    for name in ("tracts.json", "citywide_stats.json",
+                 "demographic_model.json", "demographic_model.joblib"):
+        shutil.copy2(real / name, tmp_path / name)
+
+    s = DataStore()
+    s.timeseries = {"STALE": {"quarters": ["2024Q1"], "risk_score": [1.0]}}
+    s.load(tmp_path)
+    assert s.timeseries == {}
+
+
 def test_watchlist_directions(client):
     neglect = client.get("/api/watchlist", params={"direction": "neglect", "n": 10}).json()
     assert len(neglect) == 10

@@ -50,7 +50,10 @@ class DataStore:
         # Per-tract quarterly time series — optional, additive artifact (produced
         # by `python -m pipeline.longitudinal`). Absent in bundles built before the
         # longitudinal loop has run; the timeseries endpoint then 404s per GEOID.
+        # Reset unconditionally so a reload from a bundle without the file clears
+        # any series carried over from a previous load().
         ts_path = serving_dir / "timeseries.json"
+        self.timeseries = {}
         if ts_path.exists():
             with open(ts_path) as f:
                 self.timeseries = json.load(f)

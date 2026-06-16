@@ -1,11 +1,27 @@
-import geopandas as gpd
-import pandas as pd
-import requests
+import os
 from pathlib import Path
 
+import geopandas as gpd
+import pandas as pd
+
+from pipeline.sources import census, socrata
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
+
+# NYC Open Data (Socrata) dataset ids — fetched at build time via pipeline.sources.
+DATASET_311 = "erm2-nwe9"     # 311 Service Requests (2020-present)
+DATASET_HPD = "wvxf-dwi5"     # Housing Maintenance Code Violations
+DATASET_VACATE = "tb8q-a3ar"  # Order to Repair / Vacate Orders
+DATASET_PLUTO = "64uk-42ks"   # PLUTO tax-lot data
+SOCRATA_APP_TOKEN = os.environ.get("SOCRATA_APP_TOKEN")
+
+# Default window for the (non-longitudinal) snapshot pipeline; the quarterly
+# pipeline passes explicit per-quarter dates. Previously 311 was hardcoded to
+# 2024+ and HPD/vacate were all-time; now every source shares one windowed,
+# API-backed path. `end=None` means open-ended (up to the latest record).
+DEFAULT_START = "2024-01-01"
+DEFAULT_END = None
 
 HOUSING_COMPLAINT_TYPES = {
     "HEAT/HOT WATER",
@@ -88,243 +104,210 @@ def load_council_districts() -> gpd.GeoDataFrame | None:
     return districts
 
 
-def load_311(path) -> gpd.GeoDataFrame:
-    norm_to_orig = _sniff_columns(path)
+def load_311(start: str = DEFAULT_START, end: str | None = DEFAULT_END,
+             borough: str | None = None) -> gpd.GeoDataFrame:
+    """Housing 311 service requests from Socrata (erm2-nwe9), filtered server-side
+    to housing complaint types and created_date in [start, end). Returns
+    GeoDataFrame[complaint_type, closure_time_days, geometry] — the contract
+    pipeline.aggregate expects. `borough` (uppercase name) is optional; None =
+    citywide."""
+    where = f"created_date >= '{start}'"
+    if end:
+        where += f" AND created_date < '{end}'"
+    where += f" AND complaint_type in ({socrata.in_list(sorted(HOUSING_COMPLAINT_TYPES))})"
+    if borough:
+        where += f" AND borough in ({socrata.in_list([borough.upper()])})"
+    df = socrata.fetch(
+        DATASET_311,
+        select=("unique_key,complaint_type,created_date,closed_date,"
+                "resolution_description,latitude,longitude"),
+        where=where, order="created_date", app_token=SOCRATA_APP_TOKEN,
+    )
+    empty = gpd.GeoDataFrame(
+        {"complaint_type": [], "closure_time_days": []},
+        geometry=gpd.GeoSeries([], crs="EPSG:4326"),
+    )
+    if df.empty:
+        return empty
 
-    def find(*keywords):
-        for kw in keywords:
-            for k, v in norm_to_orig.items():
-                if kw in k:
-                    return v
-        return None
-
-    complaint_orig = find("complaint_type", "complaint", "problem")
-    created_orig = find("created_date", "created")
-    closed_orig = find("closed_date", "closed")
-    lat_orig = find("latitude")
-    lon_orig = find("longitude")
-    res_orig = find("resolution_description", "resolution")
-
-    if None in (complaint_orig, created_orig, closed_orig, lat_orig, lon_orig):
-        raise ValueError(
-            f"Missing required columns. Found: {list(norm_to_orig.keys())}"
-        )
-
-    keep_orig = [complaint_orig, created_orig, closed_orig, lat_orig, lon_orig]
-    if res_orig:
-        keep_orig.append(res_orig)
-
-    # Normalized names are deterministic from originals — resolve once.
-    complaint_col = _norm(complaint_orig)
-    created_col = _norm(created_orig)
-    closed_col = _norm(closed_orig)
-    lat_col = _norm(lat_orig)
-    lon_col = _norm(lon_orig)
-    res_col = _norm(res_orig) if res_orig else None
-
-    print("Loading 311 in chunks (filtering to housing types only)...")
-    chunks = []
-    for chunk in pd.read_csv(path, usecols=keep_orig, chunksize=50_000, low_memory=False):
-        chunk.columns = [_norm(c) for c in chunk.columns]
-        chunk = chunk[chunk[complaint_col].str.upper().isin(HOUSING_COMPLAINT_TYPES)]
-        chunks.append(chunk)
-    df = pd.concat(chunks, ignore_index=True)
-    df = df.rename(columns={complaint_col: "complaint_type"})
-    print(f"After housing filter: {len(df):,} rows")
-
-    if len(df) == 0:
-        print("WARNING: 0 rows matched housing filter. Sample complaint types in raw data:")
-        sample = pd.read_csv(path, usecols=[complaint_orig], nrows=500)
-        print(sorted(sample.iloc[:, 0].dropna().unique()))
-
-    df[created_col] = pd.to_datetime(df[created_col], errors="coerce", format="mixed")
-    df[closed_col] = pd.to_datetime(df[closed_col], errors="coerce", format="mixed")
-    df = df.dropna(subset=[created_col, closed_col])
-    # Keep only 2024-present to control dataset size
-    df = df[df[created_col].dt.year >= 2024]
-    df["closure_time_days"] = (df[closed_col] - df[created_col]).dt.total_seconds() / 86400
-    print(f"After date filter (2024+): {len(df):,} rows")
+    created = pd.to_datetime(df["created_date"], errors="coerce")
+    closed = pd.to_datetime(df["closed_date"], errors="coerce")
+    df = df.assign(closure_time_days=(closed - created).dt.total_seconds() / 86400)
+    df = df.dropna(subset=["closure_time_days", "complaint_type"])
     df = df[df["closure_time_days"] >= 0.04]
-
-    if res_col and res_col in df.columns:
-        no_action = df[res_col].str.upper().str.contains(
+    # Auto-close filter (matches the prior CSV loader): drop no-action / auto-closed
+    # records that would otherwise inflate complaint_count -> accountability_gap.
+    if "resolution_description" in df.columns:
+        auto = df["resolution_description"].str.upper().str.contains(
             "NO ACTION|AUTO-CLOSE|AUTOMATICALLY CLOSED", na=False
         )
-        df = df[~no_action]
-        print(f"After auto-close filter: {len(df):,} rows")
-
-    df = _filter_to_nyc(df, lat_col, lon_col)
-    print(f"After geo filter: {len(df):,} rows")
-
+        df = df[~auto]
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+    df = _filter_to_nyc(df, "latitude", "longitude")
+    if df.empty:
+        return empty
     return gpd.GeoDataFrame(
         df[["closure_time_days", "complaint_type"]].reset_index(drop=True),
-        geometry=gpd.points_from_xy(df[lon_col], df[lat_col]),
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
         crs="EPSG:4326",
     )
 
 
-def load_hpd(path) -> gpd.GeoDataFrame:
-    norm_to_orig = _sniff_columns(path)
-
-    def find(*keywords):
-        for kw in keywords:
-            for k, v in norm_to_orig.items():
-                if kw in k:
-                    return v
-        return None
-
-    class_orig = find("class", "violationclass")
-    lat_orig = find("latitude")
-    lon_orig = find("longitude")
-    if lat_orig is None or lon_orig is None:
-        raise ValueError("Could not find latitude/longitude columns in HPD data")
-
-    keep_orig = [c for c in [class_orig, lat_orig, lon_orig] if c]
-    class_col = _norm(class_orig) if class_orig else None
-    lat_col = _norm(lat_orig)
-    lon_col = _norm(lon_orig)
-
-    print("Loading HPD in chunks (Class C only)...")
-    chunks = []
-    for chunk in pd.read_csv(path, usecols=keep_orig, chunksize=50_000, low_memory=False):
-        chunk.columns = [_norm(c) for c in chunk.columns]
-        if class_col:
-            chunk = chunk[chunk[class_col].str.upper().str.strip() == "C"]
-        chunks.append(chunk)
-    df = pd.concat(chunks, ignore_index=True)
-    print(f"HPD Class C violations: {len(df):,} rows")
-
-    df = _filter_to_nyc(df, lat_col, lon_col)
-    print(f"HPD after geo filter: {len(df):,} rows")
-
+def load_hpd(start: str = DEFAULT_START, end: str | None = DEFAULT_END,
+             borough: str | None = None) -> gpd.GeoDataFrame:
+    """HPD Class C violations from Socrata (wvxf-dwi5), date-filtered on
+    inspectiondate. The API exposes no lat/lon, so each violation is geocoded via
+    a PLUTO bbl -> lat/lon lookup. Returns GeoDataFrame[geometry] (aggregate only
+    counts violations per tract)."""
+    where = f"class = 'C' AND inspectiondate >= '{start}'"
+    if end:
+        where += f" AND inspectiondate < '{end}'"
+    if borough:
+        where += f" AND boro in ({socrata.in_list([borough.upper()])})"
+    df = socrata.fetch(
+        DATASET_HPD, select="class,inspectiondate,boroid,block,lot",
+        where=where, order="inspectiondate", app_token=SOCRATA_APP_TOKEN,
+    )
+    empty = gpd.GeoDataFrame(geometry=gpd.GeoSeries([], crs="EPSG:4326"))
+    if df.empty:
+        return empty
+    df = _geocode_hpd(df)
+    if df.empty:
+        return empty
     return gpd.GeoDataFrame(
-        geometry=gpd.points_from_xy(df[lon_col], df[lat_col]),
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
         crs="EPSG:4326",
     )
 
 
-def load_vacate_orders(path) -> gpd.GeoDataFrame:
-    norm_to_orig = _sniff_columns(path)
+def _geocode_hpd(df: pd.DataFrame) -> pd.DataFrame:
+    """Attach latitude/longitude to HPD violation rows via a PLUTO bbl lookup
+    and filter to the NYC bounding box. Expects boroid/block/lot columns; any
+    other columns (e.g. inspectiondate) are preserved on the returned frame."""
+    bbl_map = _pluto_bbl_latlon()
+    lats, lons = [], []
+    for boroid, block, lot in df[["boroid", "block", "lot"]].itertuples(index=False):
+        try:
+            ll = bbl_map.get(f"{int(boroid)}{int(block):05d}{int(lot):04d}")
+        except (TypeError, ValueError):
+            ll = None
+        lats.append(ll[0] if ll else None)
+        lons.append(ll[1] if ll else None)
+    df = df.assign(latitude=lats, longitude=lons).dropna(subset=["latitude", "longitude"])
+    return _filter_to_nyc(df, "latitude", "longitude")
 
-    def find(*keywords):
-        for kw in keywords:
-            for k, v in norm_to_orig.items():
-                if kw in k:
-                    return v
-        return None
 
-    lat_orig = find("latitude")
-    lon_orig = find("longitude")
-    units_orig = find("vacated_units", "units")
-    if lat_orig is None or lon_orig is None:
-        raise ValueError("Could not find latitude/longitude columns in vacate orders data")
+def load_hpd_with_dates(
+    cutoff_date: str, start: str = DEFAULT_START, end: str | None = DEFAULT_END,
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """Like load_hpd, but preserves inspectiondate to split violations by time.
 
-    keep_orig = [c for c in [lat_orig, lon_orig, units_orig] if c]
-    lat_col = _norm(lat_orig)
-    lon_col = _norm(lon_orig)
-    units_col = _norm(units_orig) if units_orig else None
+    Fetches HPD Class C violations from Socrata over [start, end), geocodes them
+    via PLUTO, then partitions on cutoff_date into (pre_gdf, post_gdf) — the
+    contract the temporal-validation tests depend on. Each side is a
+    GeoDataFrame[geometry]; with end=None, post-cutoff spans cutoff..latest."""
+    where = f"class = 'C' AND inspectiondate >= '{start}'"
+    if end:
+        where += f" AND inspectiondate < '{end}'"
+    df = socrata.fetch(
+        DATASET_HPD, select="class,inspectiondate,boroid,block,lot",
+        where=where, order="inspectiondate", app_token=SOCRATA_APP_TOKEN,
+    )
+    empty = gpd.GeoDataFrame(geometry=gpd.GeoSeries([], crs="EPSG:4326"))
+    if df.empty:
+        return empty, empty
+    df = df.copy()
+    df["inspectiondate"] = pd.to_datetime(df["inspectiondate"], errors="coerce")
+    df = df.dropna(subset=["inspectiondate"])
+    df = _geocode_hpd(df)
+    if df.empty:
+        return empty, empty
 
-    df = pd.read_csv(path, usecols=keep_orig, low_memory=False)
-    df.columns = [_norm(c) for c in df.columns]
+    cutoff = pd.to_datetime(cutoff_date)
 
-    df[lat_col] = pd.to_numeric(df[lat_col], errors="coerce")
-    df[lon_col] = pd.to_numeric(df[lon_col], errors="coerce")
-    df = _filter_to_nyc(df, lat_col, lon_col)
+    def to_gdf(sub: pd.DataFrame) -> gpd.GeoDataFrame:
+        return gpd.GeoDataFrame(
+            geometry=gpd.points_from_xy(sub["longitude"], sub["latitude"]),
+            crs="EPSG:4326",
+        )
 
-    if units_col:
-        df[units_col] = pd.to_numeric(df[units_col], errors="coerce").fillna(1)
-        df = df.rename(columns={units_col: "vacated_units"})
-    else:
-        df["vacated_units"] = 1
+    return to_gdf(df[df["inspectiondate"] < cutoff]), to_gdf(df[df["inspectiondate"] >= cutoff])
 
-    gdf = gpd.GeoDataFrame(
+
+def load_vacate_orders(start: str = DEFAULT_START,
+                       end: str | None = DEFAULT_END) -> gpd.GeoDataFrame:
+    """Vacate orders from Socrata (tb8q-a3ar), date-filtered on
+    vacate_effective_date. Returns GeoDataFrame[vacated_units, geometry]. Citywide
+    (the dataset is small; the spatial join assigns tracts downstream)."""
+    where = f"vacate_effective_date >= '{start}'"
+    if end:
+        where += f" AND vacate_effective_date < '{end}'"
+    df = socrata.fetch(
+        DATASET_VACATE,
+        select="number_of_vacated_units,latitude,longitude",
+        where=where, order="vacate_effective_date", app_token=SOCRATA_APP_TOKEN,
+    )
+    if df.empty:
+        return gpd.GeoDataFrame(
+            {"vacated_units": []}, geometry=gpd.GeoSeries([], crs="EPSG:4326"),
+        )
+    df["latitude"] = pd.to_numeric(df["latitude"], errors="coerce")
+    df["longitude"] = pd.to_numeric(df["longitude"], errors="coerce")
+    df = _filter_to_nyc(df, "latitude", "longitude")
+    df["vacated_units"] = pd.to_numeric(
+        df["number_of_vacated_units"], errors="coerce"
+    ).fillna(1)
+    return gpd.GeoDataFrame(
         df[["vacated_units"]].reset_index(drop=True),
-        geometry=gpd.points_from_xy(df[lon_col], df[lat_col]),
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
         crs="EPSG:4326",
     )
-    print(f"Vacate orders loaded: {len(gdf):,} records")
-    return gdf
+
+
+def _pluto_raw() -> pd.DataFrame:
+    """Citywide PLUTO lots (bbl, lat/lon, yearbuilt, unitsres) from Socrata,
+    cached. One pull serves both HPD geocoding and building-stock features."""
+    df = socrata.fetch(
+        DATASET_PLUTO, select="bbl,latitude,longitude,yearbuilt,unitsres",
+        where="latitude IS NOT NULL AND longitude IS NOT NULL",
+        order="bbl", app_token=SOCRATA_APP_TOKEN,
+    )
+    for col in ("latitude", "longitude", "yearbuilt", "unitsres"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df
+
+
+def _pluto_bbl_latlon() -> dict[str, tuple[float, float]]:
+    """bbl (10-digit string) -> (lat, lon), for geocoding HPD violations."""
+    df = _pluto_raw().dropna(subset=["latitude", "longitude"])
+    out: dict[str, tuple[float, float]] = {}
+    for bbl, lat, lon in df[["bbl", "latitude", "longitude"]].itertuples(index=False):
+        try:
+            out[str(int(float(bbl)))] = (float(lat), float(lon))
+        except (TypeError, ValueError):
+            continue
+    return out
 
 
 def load_pluto() -> gpd.GeoDataFrame:
-    """Load NYC PLUTO tax-lot data, filtered to residential lots.
-
-    Source: NYC Open Data — "Primary Land Use Tax Lot Output (PLUTO)".
-    Save the CSV as one of (the loader auto-detects):
-      data/pluto.csv
-      data/pluto_*.csv         (e.g., pluto_24v3.csv)
-      data/PLUTO*.csv
-
-    Only `latitude`, `longitude`, `yearbuilt`, and `unitsres` are kept —
-    enough to compute median building age and pre-war unit share per tract.
-    Building age is a structural predictor of HPD violations and 311
-    complaints (heat, plumbing, plaster) that's largely orthogonal to
-    demographic composition.
-    """
-    candidates = [DATA_DIR / "pluto.csv"] + sorted(DATA_DIR.glob("pluto_*.csv")) \
-        + sorted(DATA_DIR.glob("PLUTO*.csv"))
-    path = next((p for p in candidates if p.exists()), None)
-    if path is None:
-        raise FileNotFoundError(
-            "PLUTO not found. Download 'Primary Land Use Tax Lot Output "
-            "(PLUTO)' from NYC Open Data as CSV and save as:\n"
-            f"  {DATA_DIR / 'pluto.csv'}"
-        )
-
-    norm = {c.strip().lower(): c for c in pd.read_csv(path, nrows=0).columns}
-
-    def need(*aliases):
-        for a in aliases:
-            if a in norm:
-                return norm[a]
-        return None
-
-    lat_orig = need("latitude")
-    lon_orig = need("longitude")
-    year_orig = need("yearbuilt", "year_built")
-    units_orig = need("unitsres", "units_res", "residential_units")
-    if None in (lat_orig, lon_orig, year_orig, units_orig):
-        raise ValueError(
-            f"PLUTO missing required columns. Found: {list(norm.keys())[:30]}"
-        )
-
-    lat_col = lat_orig.strip().lower()
-    lon_col = lon_orig.strip().lower()
-    year_col = year_orig.strip().lower()
-    units_col = units_orig.strip().lower()
-
-    print(f"Loading PLUTO from {path.name} (residential lots only)...")
-    chunks = []
-    for chunk in pd.read_csv(
-        path, usecols=[lat_orig, lon_orig, year_orig, units_orig],
-        chunksize=100_000, low_memory=False,
-    ):
-        chunk.columns = chunk.columns.str.strip().str.lower()
-        chunk[year_col] = pd.to_numeric(chunk[year_col], errors="coerce")
-        chunk[units_col] = pd.to_numeric(chunk[units_col], errors="coerce")
-        chunk = chunk.dropna(subset=[lat_col, lon_col, year_col, units_col])
-        chunk = chunk[
-            (chunk[units_col] > 0) & chunk[year_col].between(1800, 2030)
-        ]
-        chunk = _filter_to_nyc(chunk, lat_col, lon_col)
-        chunks.append(
-            chunk.rename(columns={
-                lat_col: "lat", lon_col: "lon",
-                year_col: "yearbuilt", units_col: "unitsres",
-            })[["lat", "lon", "yearbuilt", "unitsres"]]
-        )
-
-    df = pd.concat(chunks, ignore_index=True)
+    """Residential PLUTO lots from Socrata (64uk-42ks), cached. Building age and
+    unit counts feed the per-tract building-stock features (median year built,
+    pre-war / rent-stabilized-proxy unit shares). Returns
+    GeoDataFrame[yearbuilt, unitsres, geometry]."""
+    df = _pluto_raw().dropna(subset=["latitude", "longitude", "yearbuilt", "unitsres"])
+    df = df[(df["unitsres"] > 0) & df["yearbuilt"].between(1800, 2030)]
+    df = _filter_to_nyc(df, "latitude", "longitude")
     print(f"PLUTO residential lots: {len(df):,} (units: {df['unitsres'].sum():,.0f})")
-
     return gpd.GeoDataFrame(
         df[["yearbuilt", "unitsres"]].reset_index(drop=True),
-        geometry=gpd.points_from_xy(df["lon"], df["lat"]),
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
         crs="EPSG:4326",
     )
 
 
-def load_acs() -> pd.DataFrame:
+def load_acs(year: int = 2022) -> pd.DataFrame:
     # Core + demographic variables
     #   B19013_001E median household income
     #   B08013_001E aggregate travel time to work
@@ -346,16 +329,7 @@ def load_acs() -> pd.DataFrame:
         "B25070_010E", "B25070_001E", "B23025_005E", "B23025_002E",
         "B15003_022E", "B15003_001E",
     ]
-    url = (
-        "https://api.census.gov/data/2022/acs/acs5"
-        f"?get={','.join(variables)}"
-        "&for=tract:*&in=state:36&in=county:005,047,061,081,085"
-    )
-    resp = requests.get(url, timeout=60)
-    resp.raise_for_status()
-    data = resp.json()
-    df = pd.DataFrame(data[1:], columns=data[0])
-    df["GEOID"] = df["state"] + df["county"] + df["tract"]
+    df = census.fetch_acs(year, variables)
     df = df.rename(columns={
         "B19013_001E": "median_income",
         "B08013_001E": "mean_commute_time",
@@ -408,9 +382,9 @@ def load_acs() -> pd.DataFrame:
 if __name__ == "__main__":
     tracts = load_tracts()
     print(f"Tracts: {len(tracts):,}")
-    gdf_311 = load_311(DATA_DIR / "311_data.csv")
+    gdf_311 = load_311()
     print(f"311 records: {len(gdf_311):,}")
-    gdf_hpd = load_hpd(DATA_DIR / "hpd_violations.csv")
+    gdf_hpd = load_hpd()
     print(f"HPD records: {len(gdf_hpd):,}")
     acs = load_acs()
     print(acs.head())

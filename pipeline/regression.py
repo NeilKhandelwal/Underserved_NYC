@@ -49,7 +49,7 @@ def run_rank_composite(tract_df: pd.DataFrame):
 
 if __name__ == "__main__":
     from pipeline.load_and_clean import (
-        load_tracts, load_311, load_hpd, load_vacate_orders, load_acs, DATA_DIR,
+        load_tracts, load_311, load_hpd, load_vacate_orders, load_acs,
     )
     from pipeline.spatial_join import (
         join_311_to_tracts, join_hpd_to_tracts, join_vacate_to_tracts,
@@ -57,9 +57,9 @@ if __name__ == "__main__":
     from pipeline.aggregate import aggregate
 
     tracts = load_tracts()
-    gdf_311 = load_311(DATA_DIR / "311_data.csv")
-    gdf_hpd = load_hpd(DATA_DIR / "hpd_violations.csv")
-    gdf_vacate = load_vacate_orders(DATA_DIR / "Order_To_Repair.csv")
+    gdf_311 = load_311()
+    gdf_hpd = load_hpd()
+    gdf_vacate = load_vacate_orders()
     acs = load_acs()
     joined_311 = join_311_to_tracts(gdf_311, tracts)
     joined_hpd = join_hpd_to_tracts(gdf_hpd, tracts)

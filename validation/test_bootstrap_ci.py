@@ -18,7 +18,7 @@ import pandas as pd
 
 from pipeline.aggregate import aggregate
 from pipeline.load_and_clean import (
-    DATA_DIR, load_311, load_acs, load_hpd, load_tracts, load_vacate_orders,
+    load_311, load_acs, load_hpd, load_tracts, load_vacate_orders,
 )
 from pipeline.regression import run_rank_composite
 from pipeline.spatial_join import (
@@ -41,9 +41,9 @@ def run(n_boot: int = 200, seed: int = 42) -> dict:
 
     with silence_stdout():
         tracts = load_tracts()
-        gdf_311 = load_311(DATA_DIR / "311_data.csv")
-        gdf_hpd = load_hpd(DATA_DIR / "hpd_violations.csv")
-        gdf_vacate = load_vacate_orders(DATA_DIR / "Order_To_Repair.csv")
+        gdf_311 = load_311()
+        gdf_hpd = load_hpd()
+        gdf_vacate = load_vacate_orders()
         acs = load_acs()
         joined_311 = join_311_to_tracts(gdf_311, tracts)
         joined_hpd = join_hpd_to_tracts(gdf_hpd, tracts)

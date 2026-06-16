@@ -7,6 +7,8 @@ FastAPI container serves into a small, self-contained ``serving/`` bundle:
     serving/data/tracts.json            per-GEOID records (no geometry)
     serving/data/citywide_stats.json    summary stats per numeric column
                                         (powers the "Nx vs city avg" panel)
+    serving/data/timeseries.json        per-GEOID quarterly risk series (optional;
+                                        copied if `make timeseries` has been run)
     serving/data/demographic_model.joblib   trained RF (copied)
     serving/data/demographic_model.json     model metadata (copied)
     serving/tiles/tracts.pmtiles        vector tiles for MapLibre (tippecanoe)
@@ -36,6 +38,7 @@ GEOJSON_PATH = OUTPUT_DIR / "master.geojson"
 MODEL_PATH = OUTPUT_DIR / "demographic_model.joblib"
 MODEL_META_PATH = OUTPUT_DIR / "demographic_model.json"
 DISTRICTS_OVERLAY_PATH = OUTPUT_DIR / "districts.geojson"
+TIMESERIES_PATH = OUTPUT_DIR / "timeseries.json"
 
 # Identity / label / non-metric columns excluded from numeric summary stats.
 ID_COLS = {
@@ -127,6 +130,22 @@ def build_citywide_stats(records: dict[str, dict]) -> dict[str, dict]:
     return stats
 
 
+def copy_optional(src: Path, dst: Path, *, missing_hint: str) -> bool:
+    """Copy an optional, additive bundle artifact; warn-and-skip if absent.
+
+    Returns True when copied. Used for the time series and district overlay —
+    artifacts produced by separate, occasionally-run steps whose absence must not
+    fail the core build.
+    """
+    if src.exists():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)
+        print(f"[copy]  {dst}")
+        return True
+    print(f"[skip]  {src} missing — {missing_hint}")
+    return False
+
+
 def build_pmtiles() -> bool:
     """Generate vector tiles via tippecanoe. Returns True on success.
 
@@ -203,17 +222,22 @@ def main() -> None:
     print(f"[copy]  {DATA_OUT / MODEL_PATH.name}")
     print(f"[copy]  {DATA_OUT / MODEL_META_PATH.name}")
 
+    # Per-tract quarterly time series (produced by `python -m pipeline.longitudinal`).
+    # Additive: when absent the API just 404s the timeseries endpoint, and
+    # tracts.json (the latest snapshot) keeps the map/UI working.
+    copy_optional(
+        TIMESERIES_PATH, DATA_OUT / TIMESERIES_PATH.name,
+        missing_hint="no longitudinal time series (run `make timeseries`)",
+    )
+
     build_pmtiles()
 
     # Council-district outlines for the map overlay (produced by
-    # scripts/patch_council_districts.py). Optional: warn-and-skip if absent.
-    if DISTRICTS_OVERLAY_PATH.exists():
-        TILES_OUT.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(DISTRICTS_OVERLAY_PATH, TILES_OUT / DISTRICTS_OVERLAY_PATH.name)
-        print(f"[copy]  {TILES_OUT / DISTRICTS_OVERLAY_PATH.name}")
-    else:
-        print(f"[skip]  {DISTRICTS_OVERLAY_PATH} missing — no district overlay "
-              "(run scripts/patch_council_districts.py)")
+    # scripts/patch_council_districts.py).
+    copy_optional(
+        DISTRICTS_OVERLAY_PATH, TILES_OUT / DISTRICTS_OVERLAY_PATH.name,
+        missing_hint="no district overlay (run scripts/patch_council_districts.py)",
+    )
 
     print("\nServing bundle ready under serving/.")
 

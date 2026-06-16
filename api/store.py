@@ -26,6 +26,7 @@ def _clean(value):
 class DataStore:
     def __init__(self) -> None:
         self.tracts: dict[str, dict] = {}
+        self.timeseries: dict[str, dict] = {}
         self.citywide: dict[str, dict] = {}
         self.model = None
         self.model_meta: dict = {}
@@ -46,6 +47,16 @@ class DataStore:
             geoid: {k: _clean(v) for k, v in props.items()}
             for geoid, props in raw.items()
         }
+        # Per-tract quarterly time series — optional, additive artifact (produced
+        # by `python -m pipeline.longitudinal`). Absent in bundles built before the
+        # longitudinal loop has run; the timeseries endpoint then 404s per GEOID.
+        # Reset unconditionally so a reload from a bundle without the file clears
+        # any series carried over from a previous load().
+        ts_path = serving_dir / "timeseries.json"
+        self.timeseries = {}
+        if ts_path.exists():
+            with open(ts_path) as f:
+                self.timeseries = json.load(f)
         with open(serving_dir / "citywide_stats.json") as f:
             self.citywide = json.load(f)
         with open(serving_dir / "demographic_model.json") as f:
@@ -58,6 +69,9 @@ class DataStore:
 
     def get_tract(self, geoid: str) -> dict | None:
         return self.tracts.get(str(geoid))
+
+    def get_timeseries(self, geoid: str) -> dict | None:
+        return self.timeseries.get(str(geoid))
 
     def boroughs(self) -> list[str]:
         vals = {t.get("borough") for t in self.tracts.values() if t.get("borough")}

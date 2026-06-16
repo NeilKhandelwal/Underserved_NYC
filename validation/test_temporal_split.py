@@ -14,13 +14,11 @@ Interpretation:
 """
 import sys
 
-import geopandas as gpd
 import pandas as pd
 from scipy.stats import spearmanr
 
 from pipeline.load_and_clean import (
-    DATA_DIR, _filter_to_nyc, _norm, _sniff_columns,
-    load_311, load_acs, load_tracts, load_vacate_orders,
+    load_311, load_acs, load_hpd_with_dates, load_tracts, load_vacate_orders,
 )
 from pipeline.aggregate import aggregate
 from pipeline.regression import run_rank_composite
@@ -32,61 +30,6 @@ from validation.utils import print_header, silence_stdout, verdict
 DEFAULT_CUTOFF = "2024-10-01"  # leaves ~6 months of "future" data
 
 
-def _load_hpd_with_dates(path, cutoff_date):
-    """Like pipeline.load_and_clean.load_hpd, but preserves the inspection
-    date so we can split violations by time. Returns (pre_gdf, post_gdf).
-    """
-    norm_to_orig = _sniff_columns(path)
-
-    def find(*keywords):
-        for kw in keywords:
-            for k, v in norm_to_orig.items():
-                if kw in k:
-                    return v
-        return None
-
-    class_orig = find("class", "violationclass")
-    lat_orig = find("latitude")
-    lon_orig = find("longitude")
-    date_orig = find(
-        "inspectiondate", "novissueddate", "certifieddate",
-        "originalcertifybydate", "approveddate",
-    )
-    if date_orig is None:
-        raise RuntimeError(
-            "Could not find an HPD date column for temporal split. "
-            f"Columns: {list(norm_to_orig.keys())[:30]}"
-        )
-    if lat_orig is None or lon_orig is None:
-        raise RuntimeError("Missing lat/lon in HPD data.")
-
-    keep = [c for c in [class_orig, lat_orig, lon_orig, date_orig] if c]
-    class_col = _norm(class_orig) if class_orig else None
-    lat_col = _norm(lat_orig)
-    lon_col = _norm(lon_orig)
-    date_col = _norm(date_orig)
-
-    df = pd.read_csv(path, usecols=keep, low_memory=False)
-    df.columns = [_norm(c) for c in df.columns]
-
-    df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-    if class_col:
-        df = df[df[class_col].str.upper().str.strip() == "C"]
-    df = df.dropna(subset=[date_col])
-    df = _filter_to_nyc(df, lat_col, lon_col)
-
-    cutoff = pd.to_datetime(cutoff_date)
-    pre = df[df[date_col] < cutoff]
-    post = df[df[date_col] >= cutoff]
-
-    def to_gdf(sub):
-        return gpd.GeoDataFrame(
-            geometry=gpd.points_from_xy(sub[lon_col], sub[lat_col]),
-            crs="EPSG:4326",
-        )
-    return to_gdf(pre), to_gdf(post)
-
-
 def run(cutoff_date: str = DEFAULT_CUTOFF) -> dict:
     print_header(f"Test 2 — Temporal split  (cutoff: {cutoff_date})")
 
@@ -96,9 +39,7 @@ def run(cutoff_date: str = DEFAULT_CUTOFF) -> dict:
         gdf_311 = load_311()
         gdf_vacate = load_vacate_orders()
 
-    hpd_pre, hpd_post = _load_hpd_with_dates(
-        DATA_DIR / "hpd_violations.csv", cutoff_date
-    )
+    hpd_pre, hpd_post = load_hpd_with_dates(cutoff_date)
     print(f"HPD pre-cutoff rows:  {len(hpd_pre):,}")
     print(f"HPD post-cutoff rows: {len(hpd_post):,}")
     if len(hpd_post) < 5000:

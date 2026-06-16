@@ -52,7 +52,10 @@ def fetch_acs(year: int, variables: list[str], *, cache: bool = True) -> pd.Data
         resp.raise_for_status()
         # Keyless/invalid-key requests 200-redirect to an HTML page, not JSON.
         if "json" not in resp.headers.get("content-type", "") or resp.url.endswith(".html"):
-            raise RuntimeError(f"Census returned a non-JSON response ({resp.url}). {_KEY_HELP}")
+            # Redact the API key before surfacing the URL — error messages get
+            # captured by logs/trackers, and the raw key shouldn't leak there.
+            safe_url = resp.url.replace(api_key, "***") if api_key else resp.url
+            raise RuntimeError(f"Census returned a non-JSON response ({safe_url}). {_KEY_HELP}")
         data = resp.json()
         break
 

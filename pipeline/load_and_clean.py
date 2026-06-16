@@ -172,7 +172,19 @@ def load_hpd(start: str = DEFAULT_START, end: str | None = DEFAULT_END,
     empty = gpd.GeoDataFrame(geometry=gpd.GeoSeries([], crs="EPSG:4326"))
     if df.empty:
         return empty
+    df = _geocode_hpd(df)
+    if df.empty:
+        return empty
+    return gpd.GeoDataFrame(
+        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
+        crs="EPSG:4326",
+    )
 
+
+def _geocode_hpd(df: pd.DataFrame) -> pd.DataFrame:
+    """Attach latitude/longitude to HPD violation rows via a PLUTO bbl lookup
+    and filter to the NYC bounding box. Expects boroid/block/lot columns; any
+    other columns (e.g. inspectiondate) are preserved on the returned frame."""
     bbl_map = _pluto_bbl_latlon()
     lats, lons = [], []
     for boroid, block, lot in df[["boroid", "block", "lot"]].itertuples(index=False):
@@ -183,13 +195,44 @@ def load_hpd(start: str = DEFAULT_START, end: str | None = DEFAULT_END,
         lats.append(ll[0] if ll else None)
         lons.append(ll[1] if ll else None)
     df = df.assign(latitude=lats, longitude=lons).dropna(subset=["latitude", "longitude"])
-    df = _filter_to_nyc(df, "latitude", "longitude")
-    if df.empty:
-        return empty
-    return gpd.GeoDataFrame(
-        geometry=gpd.points_from_xy(df["longitude"], df["latitude"]),
-        crs="EPSG:4326",
+    return _filter_to_nyc(df, "latitude", "longitude")
+
+
+def load_hpd_with_dates(
+    cutoff_date: str, start: str = DEFAULT_START, end: str | None = DEFAULT_END,
+) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+    """Like load_hpd, but preserves inspectiondate to split violations by time.
+
+    Fetches HPD Class C violations from Socrata over [start, end), geocodes them
+    via PLUTO, then partitions on cutoff_date into (pre_gdf, post_gdf) — the
+    contract the temporal-validation tests depend on. Each side is a
+    GeoDataFrame[geometry]; with end=None, post-cutoff spans cutoff..latest."""
+    where = f"class = 'C' AND inspectiondate >= '{start}'"
+    if end:
+        where += f" AND inspectiondate < '{end}'"
+    df = socrata.fetch(
+        DATASET_HPD, select="class,inspectiondate,boroid,block,lot",
+        where=where, order="inspectiondate", app_token=SOCRATA_APP_TOKEN,
     )
+    empty = gpd.GeoDataFrame(geometry=gpd.GeoSeries([], crs="EPSG:4326"))
+    if df.empty:
+        return empty, empty
+    df = df.copy()
+    df["inspectiondate"] = pd.to_datetime(df["inspectiondate"], errors="coerce")
+    df = df.dropna(subset=["inspectiondate"])
+    df = _geocode_hpd(df)
+    if df.empty:
+        return empty, empty
+
+    cutoff = pd.to_datetime(cutoff_date)
+
+    def to_gdf(sub: pd.DataFrame) -> gpd.GeoDataFrame:
+        return gpd.GeoDataFrame(
+            geometry=gpd.points_from_xy(sub["longitude"], sub["latitude"]),
+            crs="EPSG:4326",
+        )
+
+    return to_gdf(df[df["inspectiondate"] < cutoff]), to_gdf(df[df["inspectiondate"] >= cutoff])
 
 
 def load_vacate_orders(start: str = DEFAULT_START,

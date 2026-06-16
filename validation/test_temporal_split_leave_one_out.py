@@ -25,13 +25,13 @@ from scipy.stats import spearmanr
 
 from pipeline.aggregate import aggregate
 from pipeline.load_and_clean import (
-    DATA_DIR, load_311, load_acs, load_tracts, load_vacate_orders,
+    load_311, load_acs, load_hpd_with_dates, load_tracts, load_vacate_orders,
 )
 from pipeline.regression import COMPOSITE_WEIGHTS
 from pipeline.spatial_join import (
     join_311_to_tracts, join_hpd_to_tracts, join_vacate_to_tracts,
 )
-from validation.test_temporal_split import DEFAULT_CUTOFF, _load_hpd_with_dates
+from validation.test_temporal_split import DEFAULT_CUTOFF
 from validation.utils import print_header, silence_stdout, verdict
 
 EXCLUDED = "weighted_violation_rate"
@@ -61,9 +61,7 @@ def run(cutoff_date: str = DEFAULT_CUTOFF) -> dict:
         gdf_311 = load_311()
         gdf_vacate = load_vacate_orders()
 
-    hpd_pre, hpd_post = _load_hpd_with_dates(
-        DATA_DIR / "hpd_violations.csv", cutoff_date
-    )
+    hpd_pre, hpd_post = load_hpd_with_dates(cutoff_date)
     print(f"HPD pre-cutoff rows:  {len(hpd_pre):,}")
     print(f"HPD post-cutoff rows: {len(hpd_post):,}")
 

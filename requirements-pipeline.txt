@@ -13,6 +13,7 @@ pyogrio==0.12.1          # geopandas vector IO backend
 pyproj==3.7.2            # CRS reprojection (EPSG:2263 -> 4326)
 shapely==2.1.2
 pandas==3.0.2
+pyarrow==23.0.1          # parquet engine for the Socrata/Census on-disk cache
 numpy==2.4.4
 scikit-learn==1.8.0      # KEEP IN SYNC with requirements-api.txt (model.joblib)
 scipy==1.17.1

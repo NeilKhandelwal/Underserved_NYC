@@ -17,7 +17,10 @@ jobs:
           python-version: "3.13"
 
       - name: Install Python dependencies
-        run: pip install -r requirements-dev.txt
+        # Pipeline deps too: the data-layer and longitudinal tests mock the
+        # network but still import geopandas/requests/etc., so the light
+        # serving deps alone can't even collect them.
+        run: pip install -r requirements-dev.txt -r requirements-pipeline.txt
 
       - name: Ruff lint
         run: ruff check api/ tests/ scripts/

@@ -5,7 +5,7 @@ PY  := .venv/bin/python
 PIP := .venv/bin/pip
 
 .DEFAULT_GOAL := help
-.PHONY: help install install-pipeline install-api install-dev artifacts serving-bundle patch-districts validate app api test lint frontend-install frontend-dev frontend-build clean
+.PHONY: help install install-pipeline install-api install-dev artifacts serving-bundle patch-districts timeseries validate app api test lint frontend-install frontend-dev frontend-build clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -32,6 +32,9 @@ serving-bundle: ## Build the deployable serving/ bundle from existing artifacts 
 
 patch-districts: ## Join City Council districts onto output/master.geojson (needs data/nycc.geojson)
 	$(PY) scripts/patch_council_districts.py
+
+timeseries: ## Build output/timeseries.json — per-tract quarterly risk scores (API fetch)
+	$(PY) -m pipeline.longitudinal
 
 validate: ## Run the statistical validation suite
 	$(PY) -m validation.run_all

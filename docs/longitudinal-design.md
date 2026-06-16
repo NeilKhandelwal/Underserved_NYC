@@ -1,7 +1,14 @@
 # Design: Longitudinal Trends + Build-Time Socrata Fetch
 
-Status: **design + spike** (not yet wired into production). The spike that de-risks
-the core of this design is `scripts/spike_quarterly.py` — see [Spike](#spike) below.
+Status: **in progress.** The spike that de-risked the core
+(`scripts/spike_quarterly.py`, see [Spike](#spike)) is now being landed section by
+section:
+
+- [x] §1 Data layer — `pipeline/sources/socrata.py` + API-backed loaders
+- [x] §2 Quarterly scoring loop — `pipeline/longitudinal.py` → `output/timeseries.json`
+- [x] §3 Bundle schema — `build_serving_bundle.py` copies `timeseries.json` (optional)
+- [x] §4 API — `store` loads it; `GET /api/tract/{geoid}/timeseries`
+- [ ] §5 Frontend — per-tract sparkline + Watchlist trend arrow
 
 ## Motivation
 

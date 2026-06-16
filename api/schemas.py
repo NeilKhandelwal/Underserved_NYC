@@ -30,6 +30,23 @@ class TractDetail(TractSummary):
     properties: dict  # full per-tract record (public-API escape hatch)
 
 
+class TractTimeSeries(BaseModel):
+    """Per-tract quarterly series (from serving/data/timeseries.json). Every list
+    is index-aligned to ``quarters`` and null-padded where the tract had no score
+    that quarter. ``risk_score`` is the within-period percentile rank (relative);
+    the raw components are absolute-comparable across quarters. ``risk_residual``
+    is present only when the bundle was built with the demographic residual."""
+
+    geoid: str
+    quarters: list[str]
+    risk_score: list[float | None]
+    risk_residual: list[float | None] | None = None
+    accountability_gap: list[float | None]
+    weighted_violation_rate: list[float | None]
+    avg_closure_time_adjusted: list[float | None]
+    vacate_rate: list[float | None]
+
+
 class WatchlistRow(TractSummary):
     predicted_risk: float | None = None
     median_income: float | None = None

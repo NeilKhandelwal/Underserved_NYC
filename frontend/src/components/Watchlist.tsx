@@ -270,7 +270,7 @@ export function Watchlist({ onSelect }: { onSelect: (geoid: string) => void }) {
 
 function Drilldown({
   detail,
-  trend,
+  trend: trendData,
 }: {
   detail: TractDetail | undefined;
   trend: Trend | null | undefined;
@@ -286,10 +286,10 @@ function Drilldown({
       {detail.interpretation && (
         <div className="drill-headline">
           {detail.interpretation}
-          {trend && (
+          {trendData && (
             <span className="drill-trend">
-              {" · "}risk-score trend <TrendBadge t={trend} /> ({trend.firstQuarter}→
-              {trend.lastQuarter})
+              {" · "}risk-score trend <TrendBadge t={trendData} /> ({trendData.firstQuarter}→
+              {trendData.lastQuarter})
             </span>
           )}
         </div>

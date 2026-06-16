@@ -26,8 +26,11 @@ function formatMetric(key: string, value: number | null, unit: string): string {
 type TrendMode = "risk_score" | "risk_residual";
 
 function TrendSection({ series }: { series: TractTimeSeries }) {
+  // Require ≥2 scored residual quarters — the same minimum trend() enforces — so
+  // the "vs. prediction" button can't switch to a mode that unmounts the section.
   const hasResidual =
-    series.risk_residual != null && series.risk_residual.some((v) => v != null);
+    series.risk_residual != null &&
+    series.risk_residual.filter((v) => v != null).length >= 2;
   const [mode, setMode] = useState<TrendMode>("risk_score");
   const isResidual = mode === "risk_residual" && hasResidual;
 

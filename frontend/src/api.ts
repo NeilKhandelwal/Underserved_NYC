@@ -5,6 +5,7 @@ import type {
   PredictResponse,
   ScatterResponse,
   TractDetail,
+  TractTimeSeries,
   WatchlistDirection,
   WatchlistGroupRow,
   WatchlistRow,
@@ -16,12 +17,24 @@ async function getJSON<T>(url: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+// 404 is the expected "no data" signal here (a tract with no series, or a bundle
+// built without timeseries.json) — return null instead of throwing so callers
+// can simply omit the chart.
+async function getJSONOrNull<T>(url: string): Promise<T | null> {
+  const res = await fetch(url);
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  return res.json() as Promise<T>;
+}
+
 export const api = {
   overlays: () => getJSON<OverlaysResponse>("/api/overlays"),
   model: () => getJSON<ModelInfo>("/api/model"),
   correlations: () => getJSON<Correlation[]>("/api/correlations"),
   scatter: (column: string) => getJSON<ScatterResponse>(`/api/scatter/${column}`),
   tract: (geoid: string) => getJSON<TractDetail>(`/api/tract/${geoid}`),
+  timeseries: (geoid: string) =>
+    getJSONOrNull<TractTimeSeries>(`/api/tract/${geoid}/timeseries`),
 
   watchlist: (direction: WatchlistDirection, boroughs: string[], n: number) => {
     const params = new URLSearchParams({ direction, n: String(n) });

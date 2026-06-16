@@ -126,6 +126,23 @@ button { font-family: inherit; cursor: pointer; }
 .band-elevated { color: var(--amber); }
 .band-low { color: var(--teal); }
 
+/* ── Quarterly trend (sparkline) ── */
+.trend { margin-top: 14px; }
+.trend-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 4px; }
+.trend-title { font-size: 0.7rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.seg.seg-sm button { padding: 3px 8px; font-size: 0.7rem; }
+.sparkline {
+  width: 100%; height: auto; background: var(--card-solid);
+  border-radius: 8px; border: 1px solid var(--border);
+}
+.sparkline .spark-base { stroke: rgba(255, 255, 255, 0.18); stroke-width: 1; stroke-dasharray: 3 3; }
+.trend-summary { font-variant-numeric: tabular-nums; }
+.trend-badge { font-weight: 700; font-variant-numeric: tabular-nums; }
+.trend-badge.pos { color: var(--red); }
+.trend-badge.neg { color: var(--teal); }
+.trend-badge.flat { color: var(--muted); }
+.drill-trend { color: var(--muted); }
+
 /* ── Tables ── */
 .controls { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 16px; }
 .controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.75rem; color: var(--muted); }

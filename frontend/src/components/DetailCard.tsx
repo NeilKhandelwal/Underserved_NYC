@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
-import type { MetricComparison, TractDetail } from "../types";
+import type { MetricComparison, TractDetail, TractTimeSeries } from "../types";
+import { Sparkline, TrendBadge, trend } from "./Sparkline";
 
 const BAND_CLASS = { high: "band-high", elevated: "band-elevated", low: "band-low" };
 
@@ -22,6 +23,76 @@ function formatMetric(key: string, value: number | null, unit: string): string {
   }
 }
 
+type TrendMode = "risk_score" | "risk_residual";
+
+function TrendSection({ series }: { series: TractTimeSeries }) {
+  // Require ≥2 scored residual quarters — the same minimum trend() enforces — so
+  // the "vs. prediction" button can't switch to a mode that unmounts the section.
+  const hasResidual =
+    series.risk_residual != null &&
+    series.risk_residual.filter((v) => v != null).length >= 2;
+  const [mode, setMode] = useState<TrendMode>("risk_score");
+  const isResidual = mode === "risk_residual" && hasResidual;
+
+  const values = isResidual ? series.risk_residual! : series.risk_score;
+  const t = trend(series.quarters, values);
+  if (!t) return null; // fewer than two scored quarters — nothing to trend
+
+  // risk_score is a 0–100 percentile; a residual gets a symmetric range around 0.
+  const domain: [number, number] = isResidual
+    ? (() => {
+        const m = Math.max(10, ...values.map((v) => Math.abs(v ?? 0)));
+        return [-m, m];
+      })()
+    : [0, 100];
+
+  return (
+    <div className="trend">
+      <div className="trend-head">
+        <span className="trend-title">
+          {isResidual ? "Residual trend" : "Risk-score trend"}
+        </span>
+        {hasResidual && (
+          <div className="seg seg-sm">
+            <button
+              className={!isResidual ? "active" : ""}
+              onClick={() => setMode("risk_score")}
+            >
+              Score
+            </button>
+            <button
+              className={isResidual ? "active" : ""}
+              onClick={() => setMode("risk_residual")}
+            >
+              vs. prediction
+            </button>
+          </div>
+        )}
+      </div>
+      <Sparkline
+        quarters={series.quarters}
+        values={values}
+        domain={domain}
+        baseline={isResidual ? 0 : undefined}
+        color={isResidual ? "var(--muted)" : "var(--accent)"}
+        label={isResidual ? "Residual" : "Risk score"}
+      />
+      <div className="legend-ends">
+        <span>{t.firstQuarter}</span>
+        <span className="trend-summary">
+          <TrendBadge t={t} /> over {series.quarters.length} quarters
+        </span>
+        <span>{t.lastQuarter}</span>
+      </div>
+      <div className="legend-note" style={{ marginTop: 6 }}>
+        {isResidual
+          ? "Points vs. the demographic prediction (held-fixed model). Above 0 = more underserved than demographics predict."
+          : "Within-quarter percentile rank (0–100). The line tracks relative neglect over time, not absolute counts."}
+      </div>
+    </div>
+  );
+}
+
 function MetricRow({ m }: { m: MetricComparison }) {
   return (
     <div className="metric-box">
@@ -38,12 +109,16 @@ function MetricRow({ m }: { m: MetricComparison }) {
 
 export function DetailCard({ geoid, onClose }: { geoid: string; onClose: () => void }) {
   const [detail, setDetail] = useState<TractDetail | null>(null);
+  const [series, setSeries] = useState<TractTimeSeries | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setDetail(null);
+    setSeries(null);
     setError(null);
     api.tract(geoid).then(setDetail).catch((e) => setError(String(e)));
+    // Optional: 404s (no series, or a bundle without timeseries) resolve to null.
+    api.timeseries(geoid).then(setSeries).catch(console.error);
   }, [geoid]);
 
   return (
@@ -74,6 +149,8 @@ export function DetailCard({ geoid, onClose }: { geoid: string; onClose: () => v
               {detail.interpretation}
             </div>
           )}
+
+          {series && <TrendSection series={series} />}
 
           <div className="divider" />
           {detail.metrics.map((m) => (

@@ -44,6 +44,20 @@ export interface TractDetail extends TractSummary {
   properties: Record<string, number | string | null>;
 }
 
+// Per-tract quarterly series (api/schemas.py:TractTimeSeries). Every list is
+// index-aligned to `quarters` and null-padded where the tract had no score that
+// quarter. `risk_residual` is present only when the bundle carries the residual.
+export interface TractTimeSeries {
+  geoid: string;
+  quarters: string[];
+  risk_score: (number | null)[];
+  risk_residual: (number | null)[] | null;
+  accountability_gap: (number | null)[];
+  weighted_violation_rate: (number | null)[];
+  avg_closure_time_adjusted: (number | null)[];
+  vacate_rate: (number | null)[];
+}
+
 export interface Correlation {
   column: string;
   label: string;

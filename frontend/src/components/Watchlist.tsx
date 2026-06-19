@@ -6,6 +6,7 @@ import type {
   WatchlistGroupRow,
   WatchlistRow,
 } from "../types";
+import { TrendBadge, type Trend, trend } from "./Sparkline";
 
 const BOROUGHS = ["Bronx", "Brooklyn", "Manhattan", "Queens", "Staten Island"];
 const DIRECTIONS: { id: WatchlistDirection; label: string }[] = [
@@ -57,6 +58,9 @@ export function Watchlist({ onSelect }: { onSelect: (geoid: string) => void }) {
   const [groups, setGroups] = useState<WatchlistGroupRow[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [details, setDetails] = useState<Record<string, TractDetail>>({});
+  // undefined = not yet fetched; null = fetched but no trend (too few quarters,
+  // or a bundle without timeseries.json).
+  const [trends, setTrends] = useState<Record<string, Trend | null>>({});
 
   useEffect(() => {
     if (view === "tracts") {
@@ -77,6 +81,17 @@ export function Watchlist({ onSelect }: { onSelect: (geoid: string) => void }) {
       api
         .tract(next)
         .then((d) => setDetails((cur) => ({ ...cur, [next]: d })))
+        .catch(console.error);
+    }
+    if (next && trends[next] === undefined) {
+      api
+        .timeseries(next)
+        .then((s) =>
+          setTrends((cur) => ({
+            ...cur,
+            [next]: s ? trend(s.quarters, s.risk_score) : null,
+          })),
+        )
         .catch(console.error);
     }
   }
@@ -204,7 +219,7 @@ export function Watchlist({ onSelect }: { onSelect: (geoid: string) => void }) {
                 {expanded === r.geoid && (
                   <tr className="drill">
                     <td colSpan={8}>
-                      <Drilldown detail={details[r.geoid]} />
+                      <Drilldown detail={details[r.geoid]} trend={trends[r.geoid]} />
                     </td>
                   </tr>
                 )}
@@ -253,7 +268,13 @@ export function Watchlist({ onSelect }: { onSelect: (geoid: string) => void }) {
   );
 }
 
-function Drilldown({ detail }: { detail: TractDetail | undefined }) {
+function Drilldown({
+  detail,
+  trend: trendData,
+}: {
+  detail: TractDetail | undefined;
+  trend: Trend | null | undefined;
+}) {
   if (!detail) return <div className="loading">Loading tract detail…</div>;
   const p = detail.properties;
   const pct = (k: string) =>
@@ -262,7 +283,17 @@ function Drilldown({ detail }: { detail: TractDetail | undefined }) {
 
   return (
     <div className="drill-body">
-      {detail.interpretation && <div className="drill-headline">{detail.interpretation}</div>}
+      {detail.interpretation && (
+        <div className="drill-headline">
+          {detail.interpretation}
+          {trendData && (
+            <span className="drill-trend">
+              {" · "}risk-score trend <TrendBadge t={trendData} /> ({trendData.firstQuarter}→
+              {trendData.lastQuarter})
+            </span>
+          )}
+        </div>
+      )}
       <div className="drill-metrics">
         {components.map((m) => (
           <div key={m.key} className="drill-metric">

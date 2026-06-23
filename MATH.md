@@ -8,6 +8,21 @@ Walking through every transformation, in order of pipeline execution.
 
 ---
 
+## Pipeline at a glance
+
+Before the details, the shape of the whole thing:
+
+| Stage | What happens | Where |
+|---|---|---|
+| **1. Aggregate** | Roll raw 311 / HPD / vacate / PLUTO records up to tracts, and *normalize out* complaint mix, income-driven filing bias, and HPD triage | `pipeline/aggregate.py` |
+| **2. Composite** | Percentile-rank the four cleaned signals and take a fixed-weight average → a 0–100 risk score | `pipeline/regression.py` |
+| **3. Decompose** | A Random Forest predicts that score from demographics + building stock; the **residual** is the unexplained-underservice signal | `pipeline/demographic_analysis.py` |
+| **4. Validate** | Temporal hold-out, bootstrap CIs, weight + correction ablations, spatial autocorrelation | `validation/` |
+
+The guiding idea, returned to throughout: **normalize away every known confound *before* scoring.** That keeps the composite a transparent weighted-percentile average and reserves the Random Forest for the one decomposition that can't be done by hand — separating demographics from institutions.
+
+---
+
 ## 1. Per-tract aggregation (`pipeline/aggregate.py`)
 
 ### 1a. Complaint-type normalization of closure time
@@ -138,7 +153,7 @@ The forest averages predictions over 300 such trees, each trained on a bootstrap
 R^2 = 1 - \frac{\sum_i (y_i - \hat{y}_i)^2}{\sum_i (y_i - \bar{y})^2}, \qquad \text{RMSE} = \sqrt{\frac{1}{n}\sum_i (y_i - \hat{y}_i)^2}
 ```
 
-Current values: $R^2 = 0.748$, RMSE $= 10.4$ points.
+Current values: $R^2 = 0.749$, RMSE $= 10.4$ points.
 
 ### 3c. Residuals (the actual deliverable)
 
@@ -226,6 +241,16 @@ where $z_i$ is the residual for tract $i$. Range: $\approx -1$ (perfect anti-clu
 
 P-value via **conditional permutation**: shuffle residual values 999 times across tract locations, compute $I$ each time, count fraction of permutations with $|I^{(\text{perm})}| \ge |I^{(\text{obs})}|$. Current observed $I = +0.19$ — the residuals still cluster, which is interpreted as institutional geography (neglect propagating along enforcement boundaries) rather than missing demographic features.
 
+### 4e. Bias-correction ablation (`test_correction_sensitivity.py`)
+
+Steps 1c and 1d are *opinionated*: they treat $\log(\text{income})$ and `violation_rate` as confounders to strip out, not as signal on the same causal pathway. This test asks how much the index actually leans on those assumptions. It recomputes the composite with each correction — and both — disabled, then compares each ablated ranking against production via:
+
+- **Spearman $\rho$ / Kendall $\tau$** on the full ordering,
+- **top-$N$ overlap** ($N = 20, 50, 100$) on the worst tracts,
+- the **rank-shift distribution** (median / mean / max $|\Delta\text{rank}|$).
+
+If the top-20 barely moves, the corrections are inert; if it reshuffles, they are doing real work. Because both the raw (`complaint_rate`, `avg_closure_ratio`) and adjusted columns are already in `master.geojson`, the ablation needs no re-scoring from source.
+
 ---
 
 ## Summary of techniques used
@@ -245,5 +270,6 @@ P-value via **conditional permutation**: shuffle residual values 999 times acros
 | 4b | Nonparametric percentile bootstrap |
 | 4c | Dirichlet sampling, Kendall's $\tau$ |
 | 4d | Moran's I with KNN weights and permutation inference |
+| 4e | Bias-correction ablation: Spearman ρ, Kendall τ, top-N overlap |
 
 The core philosophy: **don't model what you can normalize away.** Each OLS residualization (income, triage) and each per-category normalization (complaint type) strips a known confound *before* the data hits the composite, so the rank composite itself stays simple — just weighted percentile averages — and the Random Forest is reserved for the irreducible demographic-vs-institutional decomposition.

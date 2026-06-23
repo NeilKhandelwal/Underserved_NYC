@@ -40,7 +40,7 @@ Per-metric arrays are aligned to ``quarters`` and null-padded where a tract had
 no score that quarter, so the frontend sparkline gets a consistent x-axis.
 
 Run:
-    python -m pipeline.longitudinal                       # 2024 Q1-Q4, citywide
+    python -m pipeline.longitudinal                       # 2024Q1-2026Q1, citywide
     python -m pipeline.longitudinal --quarters 2024Q1 2024Q2 2024Q3
     python -m pipeline.longitudinal --rolling 4           # rolling 4Q windows
     python -m pipeline.longitudinal --borough BRONX --no-residual   # quick check
@@ -300,8 +300,9 @@ def write_timeseries(series: dict[str, dict], out: Path = DEFAULT_OUT) -> None:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--quarters", nargs="+", default=quarters_between("2024Q1", "2024Q4"),
-                    help="explicit quarter labels, e.g. 2024Q1 2024Q2 (default: 2024 Q1-Q4)")
+    ap.add_argument("--quarters", nargs="+", default=quarters_between("2024Q1", "2026Q1"),
+                    help="explicit quarter labels, e.g. 2024Q1 2024Q2 "
+                         "(default: 2024Q1-2026Q1)")
     ap.add_argument("--rolling", type=int, metavar="N",
                     help="score each label over the trailing N quarters (noise smoothing)")
     ap.add_argument("--borough", help="limit 311/HPD to one borough (uppercase) — quick test")

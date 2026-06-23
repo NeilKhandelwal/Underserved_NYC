@@ -16,7 +16,7 @@ Most "underserved neighborhood" maps track demographics and poverty: low-income,
 
 The residuals still cluster geographically (Moran's I ≈ +0.19), consistent with service patterns following institutional geography rather than tract demographics.
 
-> **What it is not:** a screening and prioritization tool, not proof of causation. A high residual warrants investigation, not a verdict. See [Methodology](#methodology) and [MATH.md](MATH.md) for the limits.
+> **What it is not:**  Proof of causation, this is a screening and visualization tool. A high residual warrants investigation, not a verdict. See [Methodology](#methodology) and [MATH.md](MATH.md) for the limits.
 
 ---
 

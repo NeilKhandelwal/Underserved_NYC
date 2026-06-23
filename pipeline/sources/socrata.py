@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import random
 import time
 from pathlib import Path
 
@@ -20,6 +21,13 @@ BASE = "https://data.cityofnewyork.us/resource"
 CACHE_DIR = Path(__file__).resolve().parents[2] / "data" / "cache"
 PAGE_SIZE = 50000
 _RETRY_STATUS = {429, 500, 502, 503, 504}
+# Transport-level failures (connection reset mid-stream, chunked-encoding break,
+# read timeout) are transient on large Socrata pulls and retried like a 503.
+_RETRY_EXCEPTIONS = (
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+)
 
 
 def in_list(values) -> str:
@@ -32,11 +40,24 @@ def _cache_path(dataset: str, key: str) -> Path:
     return CACHE_DIR / f"{dataset}_{digest}.parquet"
 
 
+def _backoff(attempt: int) -> None:
+    # 1s, 2s, 4s, 8s ... plus jitter to avoid hammering in lockstep.
+    time.sleep(2 ** attempt + random.uniform(0, 1))
+
+
 def _get_with_retry(url: str, params: dict, headers: dict, tries: int = 5) -> list[dict]:
     for attempt in range(tries):
-        resp = requests.get(url, params=params, headers=headers, timeout=120)
+        try:
+            resp = requests.get(url, params=params, headers=headers, timeout=120)
+        except _RETRY_EXCEPTIONS:
+            # Connection reset / chunked-encoding break / timeout: retry, but let
+            # the final attempt's exception propagate.
+            if attempt == tries - 1:
+                raise
+            _backoff(attempt)
+            continue
         if resp.status_code in _RETRY_STATUS and attempt < tries - 1:
-            time.sleep(2 ** attempt)  # 1s, 2s, 4s, 8s
+            _backoff(attempt)
             continue
         resp.raise_for_status()
         return resp.json()

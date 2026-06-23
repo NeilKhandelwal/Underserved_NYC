@@ -76,6 +76,36 @@ def test_socrata_retries_then_succeeds(tmp_path, monkeypatch):
     assert list(df["a"]) == ["ok"] and not seq
 
 
+def test_socrata_retries_connection_reset_then_succeeds(tmp_path, monkeypatch):
+    # A connection reset mid-stream (ChunkedEncodingError) is transient and must
+    # be retried, not propagated like it was before.
+    monkeypatch.setattr(socrata, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(socrata.time, "sleep", lambda *_: None)
+    calls = {"n": 0}
+
+    def flaky_get(*a, **k):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise requests.exceptions.ChunkedEncodingError("Connection broken")
+        return FakeResp([{"a": "ok"}])
+
+    monkeypatch.setattr(socrata.requests, "get", flaky_get)
+    df = socrata.fetch("ds", select="a", where="1=1", order="a", cache=False)
+    assert list(df["a"]) == ["ok"] and calls["n"] == 2
+
+
+def test_socrata_raises_after_exhausting_connection_retries(tmp_path, monkeypatch):
+    monkeypatch.setattr(socrata, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(socrata.time, "sleep", lambda *_: None)
+
+    def always_reset(*a, **k):
+        raise requests.exceptions.ConnectionError("reset by peer")
+
+    monkeypatch.setattr(socrata.requests, "get", always_reset)
+    with pytest.raises(requests.exceptions.ConnectionError):
+        socrata.fetch("ds", select="a", where="1=1", order="a", cache=False)
+
+
 # ── Census client ────────────────────────────────────────────────────────────
 
 def test_census_requires_key(monkeypatch):

@@ -34,7 +34,6 @@ INVERTED = {"Median Income", "% Bachelor's+"}
 # Display labels keyed by column (for predictor / correlations / model panels).
 PRETTY: dict[str, str] = {cfg["col"]: label for label, cfg in OVERLAY_OPTIONS.items()}
 PRETTY.setdefault("mean_commute_time", "Aggregate Commute Time")
-PRETTY.setdefault("nycha_share", "NYCHA Share")
 PRETTY.setdefault("median_year_built", "Median Year Built")
 PRETTY.setdefault("pct_prewar_units", "% Pre-War Units")
 PRETTY.setdefault("pct_rent_stab_proxy", "% Rent-Stabilized (proxy)")

@@ -11,7 +11,7 @@ Interpretation:
   p_sim > 0.05               — null of spatial randomness not rejected
   strong significant positive I — the RF is missing a spatial predictor
                                   (add features like borough fixed effects,
-                                  building age, NYCHA share, etc.)
+                                  building age, etc.)
 """
 import sys
 
@@ -70,7 +70,7 @@ def run(k: int = 6, n_perm: int = 999) -> dict:
         print(
             "  → The RF residuals cluster spatially, meaning the demographic "
             "feature set leaves a neighborhood signature. Adding spatial "
-            "features (borough fixed effects, building-age, NYCHA share, etc.) "
+            "features (borough fixed effects, building-age, etc.) "
             "should improve the counterfactual."
         )
 

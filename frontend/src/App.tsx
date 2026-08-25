@@ -3,6 +3,7 @@ import { api } from "./api";
 import type { ModelInfo, OverlayInfo, OverlaysResponse } from "./types";
 import { MapView } from "./components/MapView";
 import { FilterCard } from "./components/FilterCard";
+import { MapLegend } from "./components/MapLegend";
 import { DetailCard } from "./components/DetailCard";
 import { Watchlist } from "./components/Watchlist";
 import { SearchBox, type Place } from "./components/SearchBox";
@@ -25,13 +26,27 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 const ABOUT_SEEN_KEY = "underserved-nyc:about-seen";
+const DEFAULT_OVERLAY = "Risk Score";
+
+// Shareable map state from the query string. The overlay label is re-validated
+// against the catalog once it loads; the tract geoid is passed through (a bad
+// one just surfaces as the detail card's fetch error).
+function initFromURL() {
+  const p = new URLSearchParams(window.location.search);
+  return {
+    overlay: p.get("overlay") ?? DEFAULT_OVERLAY,
+    tract: p.get("tract"),
+    districts: p.get("districts") === "1",
+  };
+}
 
 export function App() {
+  const [init] = useState(initFromURL);
   const [overlaysResp, setOverlaysResp] = useState<OverlaysResponse | null>(null);
   const [model, setModel] = useState<ModelInfo | null>(null);
-  const [overlayLabel, setOverlayLabel] = useState("Risk Score");
-  const [selectedGeoid, setSelectedGeoid] = useState<string | null>(null);
-  const [showDistricts, setShowDistricts] = useState(false);
+  const [overlayLabel, setOverlayLabel] = useState(init.overlay);
+  const [selectedGeoid, setSelectedGeoid] = useState<string | null>(init.tract);
+  const [showDistricts, setShowDistricts] = useState(init.districts);
   const [flyTo, setFlyTo] = useState<{ lon: number; lat: number; key: number } | null>(null);
   const [pin, setPin] = useState<{ lon: number; lat: number } | null>(null);
   const [tab, setTab] = useState<Tab>("map");
@@ -42,9 +57,46 @@ export function App() {
   const navSeqRef = useRef(0);
 
   useEffect(() => {
-    api.overlays().then(setOverlaysResp).catch(console.error);
+    api
+      .overlays()
+      .then((resp) => {
+        setOverlaysResp(resp);
+        // Drop a URL-supplied overlay label the catalog doesn't know.
+        const labels = new Set(resp.overlays.map((o) => o.label));
+        setOverlayLabel((l) => (labels.has(l) ? l : DEFAULT_OVERLAY));
+      })
+      .catch(console.error);
     api.model().then(setModel).catch(console.error);
   }, []);
+
+  // A shared link with a tract should land the viewer on it — unless they've
+  // already navigated elsewhere (search, watchlist pick) before it resolves.
+  useEffect(() => {
+    if (!init.tract) return;
+    const seq = ++navSeqRef.current;
+    api
+      .tract(init.tract)
+      .then((d) => {
+        if (navSeqRef.current !== seq) return; // superseded by a newer navigation
+        const lon = d.properties.centroid_lon as number | null;
+        const lat = d.properties.centroid_lat as number | null;
+        if (lon != null && lat != null) setFlyTo({ lon, lat, key: Date.now() });
+      })
+      .catch(() => {
+        /* bad geoid — the detail card surfaces the fetch error */
+      });
+  }, [init.tract]);
+
+  // Mirror the shareable map state into the URL — replace, not push, so
+  // browsing the map doesn't pollute history. Defaults are omitted.
+  useEffect(() => {
+    const p = new URLSearchParams();
+    if (overlayLabel !== DEFAULT_OVERLAY) p.set("overlay", overlayLabel);
+    if (selectedGeoid) p.set("tract", selectedGeoid);
+    if (showDistricts) p.set("districts", "1");
+    const qs = p.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }, [overlayLabel, selectedGeoid, showDistricts]);
 
   // Greet first-time visitors with the About modal; returning visitors aren't interrupted.
   useEffect(() => {
@@ -88,8 +140,9 @@ export function App() {
   }
 
   // Direct selection change (map click, detail-card close). Nothing to await,
-  // but it still counts as a navigation so a pending address lookup or list
-  // pick can't apply a stale selection or camera move afterwards.
+  // but it still counts as a navigation so a pending address lookup, list
+  // pick, or shared-link landing can't apply a stale selection or camera
+  // move afterwards.
   function selectDirect(geoid: string | null) {
     navSeqRef.current++;
     setSelectedGeoid(geoid);
@@ -154,7 +207,6 @@ export function App() {
           <FilterCard
             overlays={overlaysResp.overlays}
             selected={overlay}
-            residualBins={overlaysResp.residual_bins}
             showDistricts={showDistricts}
             onChange={setOverlayLabel}
             onToggleDistricts={setShowDistricts}
@@ -162,6 +214,7 @@ export function App() {
           {selectedGeoid && (
             <DetailCard geoid={selectedGeoid} onClose={() => selectDirect(null)} />
           )}
+          <MapLegend overlay={overlay} residualBins={overlaysResp.residual_bins} />
         </>
       )}
 

@@ -32,6 +32,9 @@ __pycache__/
 !.env.example
 .streamlit/secrets.toml
 
+# ── Local run logs ──
+*.log
+
 # ── OS / editor ──
 .DS_Store
 *.swp

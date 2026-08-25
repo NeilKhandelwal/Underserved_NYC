@@ -6,6 +6,16 @@ An interactive map and API that quantify housing-service underservice across eve
 
 ---
 
+## This repo vs. the deployed version
+
+This is the **personal, original version** of the project: the housing underservice risk index described below, kept as my own end-to-end build (data pipeline → ML → API → map UI → deploy).
+
+A separate fork, **[Underserved_NYC-prod](https://github.com/NeilKhandelwal/Underserved_NYC-prod)** (live at [underserved-nyc-civic.fly.dev](https://underserved-nyc-civic.fly.dev)), is the version actually in use by the group it was built for, and it has diverged from this one. Based on their feedback and needs it was re-scoped from a housing risk index into a **311 close-times-by-agency map** — per-agency close-time medians, outcome rates read from resolution notes, tract-vs-tract and agency-vs-agency comparison — and its UI, docs, and methodology reflect their requirements rather than the design here.
+
+Improvements from that fork that aren't tied to the pivot (address search, movable cards, shareable links, housekeeping) are ported back here as they land. Everything else in this README describes this repository only.
+
+---
+
 ## What it does
 
 Most "underserved neighborhood" maps track demographics and poverty: low-income, majority-minority areas score worst. That pattern is real but expected, and it is not locally actionable. This project separates the **structural** pattern from the **institutional** one:

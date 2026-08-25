@@ -5,6 +5,8 @@ The production API does NOT need geopandas, the 16 GB raw data, or even the
 FastAPI container serves into a small, self-contained ``serving/`` bundle:
 
     serving/data/tracts.json            per-GEOID records (no geometry)
+    serving/data/tract_shapes.json      per-GEOID simplified polygons + bbox
+                                        (powers the /tract-at point lookup)
     serving/data/citywide_stats.json    summary stats per numeric column
                                         (powers the "Nx vs city avg" panel)
     serving/data/timeseries.json        per-GEOID quarterly risk series (optional;
@@ -103,6 +105,56 @@ def build_tract_records(features: list[dict]) -> dict[str, dict]:
         props["centroid_lat"] = lat
         records[str(geoid)] = props
     return records
+
+
+# Coordinate precision for the shapes artifact. 5 decimals ≈ 1.1 m — far finer
+# than census-tract boundaries need for a point-in-polygon containment test, and
+# rounding here roughly halves the file vs. raw double precision.
+SHAPE_PRECISION = 5
+
+
+def _polygons_of(geometry: dict | None) -> list[list[list[list[float]]]]:
+    """Normalize Polygon / MultiPolygon geometry to a list of polygons, each a
+    list of rings (ring 0 = exterior, rest = holes), each ring a list of
+    [lon, lat] pairs rounded to SHAPE_PRECISION. Anything else -> []."""
+    if not geometry:
+        return []
+    gtype = geometry.get("type")
+    coords = geometry.get("coordinates")
+    if gtype == "Polygon":
+        raw_polys = [coords]
+    elif gtype == "MultiPolygon":
+        raw_polys = coords
+    else:
+        return []
+
+    def round_ring(ring) -> list[list[float]]:
+        return [[round(x, SHAPE_PRECISION), round(y, SHAPE_PRECISION)] for x, y in ring]
+
+    return [[round_ring(ring) for ring in poly] for poly in raw_polys]
+
+
+def build_tract_shapes(features: list[dict]) -> dict[str, dict]:
+    """GEOID -> {bbox: [minx, miny, maxx, maxy], polygons: [[ring, ...], ...]}.
+
+    The bbox is a cheap reject filter for the API's point-in-polygon lookup; the
+    polygons carry holes (ring index > 0) so containment is exact. Built from the
+    same master.geojson that feeds tippecanoe, so it stays in step with the tiles."""
+    shapes: dict[str, dict] = {}
+    for feat in features:
+        geoid = feat.get("properties", {}).get("GEOID")
+        if geoid is None:
+            continue
+        polygons = _polygons_of(feat.get("geometry"))
+        if not polygons:
+            continue
+        xs = [pt[0] for poly in polygons for ring in poly for pt in ring]
+        ys = [pt[1] for poly in polygons for ring in poly for pt in ring]
+        shapes[str(geoid)] = {
+            "bbox": [min(xs), min(ys), max(xs), max(ys)],
+            "polygons": polygons,
+        }
+    return shapes
 
 
 def build_citywide_stats(records: dict[str, dict]) -> dict[str, dict]:
@@ -204,12 +256,16 @@ def main() -> None:
     features = geojson.get("features", [])
 
     records = build_tract_records(features)
+    shapes = build_tract_shapes(features)
     stats = build_citywide_stats(records)
 
     tracts_path = DATA_OUT / "tracts.json"
+    shapes_path = DATA_OUT / "tract_shapes.json"
     stats_path = DATA_OUT / "citywide_stats.json"
     with open(tracts_path, "w") as f:
         json.dump(records, f, separators=(",", ":"))
+    with open(shapes_path, "w") as f:
+        json.dump(shapes, f, separators=(",", ":"))
     with open(stats_path, "w") as f:
         json.dump(stats, f, indent=2)
 
@@ -218,6 +274,8 @@ def main() -> None:
 
     print(f"[write] {tracts_path}  ({len(records):,} tracts, "
           f"{tracts_path.stat().st_size / 1e6:.1f} MB)")
+    print(f"[write] {shapes_path}  ({len(shapes):,} tracts, "
+          f"{shapes_path.stat().st_size / 1e6:.1f} MB)")
     print(f"[write] {stats_path}  ({len(stats)} numeric columns)")
     print(f"[copy]  {DATA_OUT / MODEL_PATH.name}")
     print(f"[copy]  {DATA_OUT / MODEL_META_PATH.name}")

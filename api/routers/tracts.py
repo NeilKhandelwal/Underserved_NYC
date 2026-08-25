@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from .. import service
 from ..deps import get_store
-from ..schemas import TractDetail, TractSummary, TractTimeSeries
+from ..schemas import TractAtResponse, TractDetail, TractSummary, TractTimeSeries
 from ..store import DataStore
 
 router = APIRouter(tags=["tracts"])
@@ -30,6 +30,23 @@ def list_tracts(store: DataStore = Depends(get_store)):
 def list_districts(store: DataStore = Depends(get_store)):
     """Sorted distinct City Council district numbers present in the data."""
     return store.districts()
+
+
+@router.get("/tract-at", response_model=TractAtResponse)
+def tract_at(
+    lat: float = Query(..., ge=-90, le=90),
+    lon: float = Query(..., ge=-180, le=180),
+    store: DataStore = Depends(get_store),
+):
+    """Resolve a (lat, lon) point to the GEOID of the tract that contains it.
+
+    Powers the address-search pin: geocode an address client-side, then ask which
+    tract it lands in. 404s when the point is outside every tract (water, outside
+    NYC, or a bundle built without ``tract_shapes.json``)."""
+    geoid = store.tract_at(lon, lat)
+    if geoid is None:
+        raise HTTPException(status_code=404, detail="No tract contains this point")
+    return {"geoid": geoid}
 
 
 @router.get("/tract/{geoid}", response_model=TractDetail)

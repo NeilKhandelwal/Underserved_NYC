@@ -45,7 +45,7 @@ The intended audience is twofold: civic-tech and policy users triaging where to 
 
 ## Features
 
-**Map** — A MapLibre choropleth of all tracts with switchable overlays: the risk score, the **unexplained-underservice residual** (diverging red/green), the model's predicted risk, and individual demographic layers (income, poverty, race, rent burden, and others). A toggle overlays **City Council district** boundaries with district numbers. Clicking a tract opens a detail card showing its score, residual, district, a quarterly trend sparkline, and how its key metrics compare to the citywide average.
+**Map** — A MapLibre choropleth of all tracts with switchable overlays: the risk score, the **unexplained-underservice residual** (diverging red/green), the model's predicted risk, and individual demographic layers (income, poverty, race, rent burden, and others). A toggle overlays **City Council district** boundaries with district numbers. Clicking a tract opens a detail card showing its score, residual, district, a quarterly trend sparkline, and how its key metrics compare to the citywide average. An **address search** (NYC GeoSearch autocomplete, no API key) drops a pin, flies to it, and selects the tract the address falls in. The overlay and detail cards are **movable and minimizable**, the color key is pinned to the map corner, and the view state (overlay, selected tract, district toggle) is mirrored into the URL so any view is a **shareable link**.
 
 **Watchlist** — A ranked table of residual outliers in three modes: *most unexplained underservice*, *unexpected success* (better-served than predicted), and *biggest surprises*. Each row expands into a per-tract drilldown — a plain-language headline (e.g. *"scores +18 points vs. demographic prediction; main driver: accountability gap 3.2× city average"*), the four risk components vs. citywide, and a demographics snapshot. A view toggle aggregates the same data by **neighborhood** or **council district** so it reads as areas needing attention rather than 2,200 individual rows.
 
@@ -66,8 +66,9 @@ data/ (16 GB, gitignored)
   └─▶ pipeline/  ───▶ output/ (master.geojson, demographic_model.joblib, demographic_model.json)
                           │
                           └─▶ scripts/build_serving_bundle.py ──▶ serving/
-                                  (tracts.json incl. centroids, citywide_stats.json,
-                                   timeseries.json, demographic_model.{joblib,json},
+                                  (tracts.json incl. centroids, tract_shapes.json,
+                                   citywide_stats.json, timeseries.json,
+                                   demographic_model.{joblib,json},
                                    tracts.pmtiles via tippecanoe, districts.geojson)
                                                    │
                                                    ▼
@@ -75,6 +76,7 @@ data/ (16 GB, gitignored)
                                               ├─ /api/{tract,tracts,watchlist,districts,
                                               │   correlations,scatter,model,overlays,predict}
                                               ├─ /api/tract/{geoid}/timeseries
+                                              ├─ /api/tract-at?lat=&lon=  (point → tract)
                                               ├─ /healthz
                                               ├─ /tiles  (StaticFiles — PMTiles + district overlay, Range-capable)
                                               └─ /       (built SPA, mounted LAST)
@@ -126,6 +128,7 @@ All endpoints are under `/api` and return JSON.
 | `GET /api/tracts` | Lightweight list of every tract (id, name, borough, district, score, residual) |
 | `GET /api/tract/{geoid}` | Full detail: score, residual, band, metric-vs-city comparisons, interpretation |
 | `GET /api/tract/{geoid}/timeseries` | Per-tract quarterly risk-score history (drives the trend sparkline) |
+| `GET /api/tract-at?lat=&lon=` | GEOID of the tract containing a point, or 404 (drives the address search) |
 | `GET /api/watchlist` | Top residual outliers (`direction`, `borough`, `district`, `n`) |
 | `GET /api/watchlist/groups` | Watchlist aggregated `by=neighborhood\|council_district` |
 | `GET /api/districts` | Distinct City Council district numbers |

@@ -23,6 +23,25 @@ def _clean(value):
     return value
 
 
+def _point_in_ring(lon: float, lat: float, ring: list[list[float]]) -> bool:
+    """Even-odd ray-casting test: is (lon, lat) inside the polygon ring?
+
+    Casts a ray in +lon and counts edge crossings; odd = inside. Points exactly on
+    an edge are decided arbitrarily, which is immaterial for address containment."""
+    inside = False
+    n = len(ring)
+    j = n - 1
+    for i in range(n):
+        xi, yi = ring[i][0], ring[i][1]
+        xj, yj = ring[j][0], ring[j][1]
+        if (yi > lat) != (yj > lat):
+            x_cross = (xj - xi) * (lat - yi) / (yj - yi) + xi
+            if lon < x_cross:
+                inside = not inside
+        j = i
+    return inside
+
+
 class DataStore:
     def __init__(self) -> None:
         self.tracts: dict[str, dict] = {}
@@ -32,6 +51,9 @@ class DataStore:
         self.model_meta: dict = {}
         self.df: pd.DataFrame | None = None
         self.correlations: list[dict] = []
+        # Flat (geoid, minx, miny, maxx, maxy, polygons) tuples for the point->tract
+        # lookup; empty when the bundle predates the tract_shapes.json artifact.
+        self._shapes: list[tuple] = []
         self._loaded = False
 
     @property
@@ -57,6 +79,18 @@ class DataStore:
         if ts_path.exists():
             with open(ts_path) as f:
                 self.timeseries = json.load(f)
+        # Per-tract polygons for the /tract-at point lookup — optional, additive
+        # artifact (produced by scripts/build_serving_bundle.py). Absent in bundles
+        # built before this feature; the lookup then returns None for every point.
+        # Reset unconditionally so a reload from an older bundle clears stale shapes.
+        shapes_path = serving_dir / "tract_shapes.json"
+        self._shapes = []
+        if shapes_path.exists():
+            with open(shapes_path) as f:
+                raw_shapes = json.load(f)
+            self._shapes = [
+                (geoid, *s["bbox"], s["polygons"]) for geoid, s in raw_shapes.items()
+            ]
         with open(serving_dir / "citywide_stats.json") as f:
             self.citywide = json.load(f)
         with open(serving_dir / "demographic_model.json") as f:
@@ -72,6 +106,23 @@ class DataStore:
 
     def get_timeseries(self, geoid: str) -> dict | None:
         return self.timeseries.get(str(geoid))
+
+    def tract_at(self, lon: float, lat: float) -> str | None:
+        """GEOID of the tract containing (lon, lat), or None if the point falls
+        outside every tract (water, outside NYC, or a bundle without shapes).
+
+        Linear scan over ~2.2k tracts with a bbox reject before the ray-cast —
+        sub-millisecond, so no spatial index is warranted (Rule 2)."""
+        for geoid, minx, miny, maxx, maxy, polygons in self._shapes:
+            if lon < minx or lon > maxx or lat < miny or lat > maxy:
+                continue
+            for rings in polygons:
+                # rings[0] is the exterior; rings[1:] are holes punched out of it.
+                if _point_in_ring(lon, lat, rings[0]) and not any(
+                    _point_in_ring(lon, lat, hole) for hole in rings[1:]
+                ):
+                    return geoid
+        return None
 
     def boroughs(self) -> list[str]:
         vals = {t.get("borough") for t in self.tracts.values() if t.get("borough")}

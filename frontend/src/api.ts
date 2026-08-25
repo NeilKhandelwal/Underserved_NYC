@@ -36,6 +36,11 @@ export const api = {
   timeseries: (geoid: string) =>
     getJSONOrNull<TractTimeSeries>(`/api/tract/${geoid}/timeseries`),
 
+  // Which tract contains a point. 404 (no tract — water/out-of-area) returns null
+  // so the caller can still drop the pin without selecting a tract.
+  tractAt: (lat: number, lon: number) =>
+    getJSONOrNull<{ geoid: string }>(`/api/tract-at?lat=${lat}&lon=${lon}`),
+
   watchlist: (direction: WatchlistDirection, boroughs: string[], n: number) => {
     const params = new URLSearchParams({ direction, n: String(n) });
     for (const b of boroughs) params.append("borough", b);

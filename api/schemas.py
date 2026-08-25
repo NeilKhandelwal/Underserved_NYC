@@ -30,6 +30,12 @@ class TractDetail(TractSummary):
     properties: dict  # full per-tract record (public-API escape hatch)
 
 
+class TractAtResponse(BaseModel):
+    """The tract whose polygon contains a queried (lat, lon) point."""
+
+    geoid: str
+
+
 class TractTimeSeries(BaseModel):
     """Per-tract quarterly series (from serving/data/timeseries.json). Every list
     is index-aligned to ``quarters`` and null-padded where the tract had no score

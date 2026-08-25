@@ -69,12 +69,15 @@ export function App() {
     api.model().then(setModel).catch(console.error);
   }, []);
 
-  // A shared link with a tract should land the viewer on it.
+  // A shared link with a tract should land the viewer on it — unless they've
+  // already navigated elsewhere (search, watchlist pick) before it resolves.
   useEffect(() => {
     if (!init.tract) return;
+    const seq = ++navSeqRef.current;
     api
       .tract(init.tract)
       .then((d) => {
+        if (navSeqRef.current !== seq) return; // superseded by a newer navigation
         const lon = d.properties.centroid_lon as number | null;
         const lat = d.properties.centroid_lat as number | null;
         if (lon != null && lat != null) setFlyTo({ lon, lat, key: Date.now() });

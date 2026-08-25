@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
 import type { ModelInfo, OverlayInfo, OverlaysResponse } from "./types";
 import { MapView } from "./components/MapView";
@@ -36,6 +36,10 @@ export function App() {
   const [pin, setPin] = useState<{ lon: number; lat: number } | null>(null);
   const [tab, setTab] = useState<Tab>("map");
   const [showAbout, setShowAbout] = useState(false);
+  // Id of the latest navigation intent (address search, list pick). Each one
+  // awaits a request; a slow response from an older intent must not apply
+  // its selection or camera move after a newer one has started.
+  const navSeqRef = useRef(0);
 
   useEffect(() => {
     api.overlays().then(setOverlaysResp).catch(console.error);
@@ -67,11 +71,16 @@ export function App() {
 
   // Address search: drop a pin, fly there, and select the tract the point lands in.
   async function searchPlace(place: Place) {
+    const seq = ++navSeqRef.current;
     setTab("map");
     setPin({ lon: place.lon, lat: place.lat });
     setFlyTo({ lon: place.lon, lat: place.lat, key: Date.now() });
+    // Clear the previous tract now so its detail card can't describe the new
+    // pin while the lookup is in flight (or if the lookup fails).
+    setSelectedGeoid(null);
     try {
       const hit = await api.tractAt(place.lat, place.lon);
+      if (navSeqRef.current !== seq) return; // superseded by a newer navigation
       setSelectedGeoid(hit?.geoid ?? null); // null when the point is outside all tracts
     } catch (e) {
       console.error(e);
@@ -80,10 +89,12 @@ export function App() {
 
   // Select a tract from the watchlist: fetch its centroid, fly there, show detail.
   async function selectFromList(geoid: string) {
+    const seq = ++navSeqRef.current;
     setSelectedGeoid(geoid);
     setTab("map");
     try {
       const d = await api.tract(geoid);
+      if (navSeqRef.current !== seq) return; // superseded by a newer navigation
       const lon = d.properties.centroid_lon as number | null;
       const lat = d.properties.centroid_lat as number | null;
       if (lon != null && lat != null) setFlyTo({ lon, lat, key: Date.now() });

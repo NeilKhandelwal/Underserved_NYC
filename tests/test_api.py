@@ -136,6 +136,65 @@ def test_reload_without_timeseries_clears_stale_series(tmp_path):
     assert s.timeseries == {}
 
 
+def test_point_in_polygon_respects_holes_and_bbox():
+    """The containment test must treat a hole as *outside* the tract and reject
+    points beyond the bbox — otherwise an address in a tract's interior cutout
+    (or far away) would be mis-assigned. Deterministic, no bundle needed."""
+    from api.store import DataStore
+
+    exterior = [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]]
+    hole = [[4, 4], [6, 4], [6, 6], [4, 6], [4, 4]]
+    s = DataStore()
+    s._shapes = [("TEST", 0.0, 0.0, 10.0, 10.0, [[exterior, hole]])]
+
+    assert s.tract_at(1, 1) == "TEST"     # interior, clear of the hole
+    assert s.tract_at(5, 5) is None       # inside the hole -> not contained
+    assert s.tract_at(20, 20) is None     # outside the bbox -> bbox reject
+
+
+def _shapes_or_skip(client):
+    from api.store import store
+
+    if not store._shapes:
+        pytest.skip("bundle predates tract_shapes.json; run `make serving-bundle`")
+
+
+def test_tract_at_known_location(client):
+    """A point solidly inside Times Square must resolve to a Manhattan tract
+    (county FIPS 36061) — ties the lookup to a real-world expectation, not just
+    'returns something'."""
+    _shapes_or_skip(client)
+    r = client.get("/api/tract-at", params={"lat": 40.7580, "lon": -73.9855})
+    assert r.status_code == 200
+    geoid = r.json()["geoid"]
+    assert geoid.startswith("36061")  # New York County (Manhattan)
+    assert client.get(f"/api/tract/{geoid}").json()["borough"] == "Manhattan"
+
+
+def test_tract_at_centroid_round_trips(client):
+    """A tract's own centroid should land back in that tract. True for the large
+    majority of (mostly convex) census tracts; we allow a small slack for genuinely
+    concave shapes whose centroid falls in a neighbor."""
+    _shapes_or_skip(client)
+    from api.store import store
+
+    sample = [
+        (geoid, t["centroid_lon"], t["centroid_lat"])
+        for geoid, t in list(store.tracts.items())[:200]
+        if t.get("centroid_lon") is not None
+    ]
+    hits = sum(store.tract_at(lon, lat) == geoid for geoid, lon, lat in sample)
+    assert hits / len(sample) > 0.9
+
+
+def test_tract_at_outside_nyc_404(client):
+    """A point outside every tract (here, upstate) is the expected 'address
+    geocoded to water / out of area' signal — must 404, not snap to a tract."""
+    _shapes_or_skip(client)
+    r = client.get("/api/tract-at", params={"lat": 44.0, "lon": -73.0})
+    assert r.status_code == 404
+
+
 def test_watchlist_directions(client):
     neglect = client.get("/api/watchlist", params={"direction": "neglect", "n": 10}).json()
     assert len(neglect) == 10

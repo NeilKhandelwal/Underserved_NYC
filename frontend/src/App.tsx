@@ -5,6 +5,7 @@ import { MapView } from "./components/MapView";
 import { FilterCard } from "./components/FilterCard";
 import { DetailCard } from "./components/DetailCard";
 import { Watchlist } from "./components/Watchlist";
+import { SearchBox, type Place } from "./components/SearchBox";
 import { Demographics } from "./components/Demographics";
 import { Predictor } from "./components/Predictor";
 import { Methodology } from "./components/Methodology";
@@ -32,6 +33,7 @@ export function App() {
   const [selectedGeoid, setSelectedGeoid] = useState<string | null>(null);
   const [showDistricts, setShowDistricts] = useState(false);
   const [flyTo, setFlyTo] = useState<{ lon: number; lat: number; key: number } | null>(null);
+  const [pin, setPin] = useState<{ lon: number; lat: number } | null>(null);
   const [tab, setTab] = useState<Tab>("map");
   const [showAbout, setShowAbout] = useState(false);
 
@@ -62,6 +64,19 @@ export function App() {
     const list = overlaysResp?.overlays ?? [];
     return list.find((o) => o.label === overlayLabel) ?? list[0] ?? null;
   }, [overlaysResp, overlayLabel]);
+
+  // Address search: drop a pin, fly there, and select the tract the point lands in.
+  async function searchPlace(place: Place) {
+    setTab("map");
+    setPin({ lon: place.lon, lat: place.lat });
+    setFlyTo({ lon: place.lon, lat: place.lat, key: Date.now() });
+    try {
+      const hit = await api.tractAt(place.lat, place.lon);
+      setSelectedGeoid(hit?.geoid ?? null); // null when the point is outside all tracts
+    } catch (e) {
+      console.error(e);
+    }
+  }
 
   // Select a tract from the watchlist: fetch its centroid, fly there, show detail.
   async function selectFromList(geoid: string) {
@@ -101,6 +116,7 @@ export function App() {
             showDistricts={showDistricts}
             selectedGeoid={selectedGeoid}
             flyTo={flyTo}
+            pin={pin}
             onSelect={(geoid) => setSelectedGeoid(geoid)}
           />
         )}
@@ -108,6 +124,7 @@ export function App() {
 
       {tab === "map" && overlaysResp && overlay && (
         <>
+          <SearchBox onSelect={searchPlace} onClear={() => setPin(null)} />
           <FilterCard
             overlays={overlaysResp.overlays}
             selected={overlay}

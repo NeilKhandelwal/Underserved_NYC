@@ -35,6 +35,7 @@ interface Props {
   showDistricts: boolean;
   selectedGeoid: string | null;
   flyTo: { lon: number; lat: number; key: number } | null;
+  pin: { lon: number; lat: number } | null;
   onSelect: (geoid: string | null) => void;
 }
 
@@ -44,10 +45,12 @@ export function MapView({
   showDistricts,
   selectedGeoid,
   flyTo,
+  pin,
   onSelect,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
+  const markerRef = useRef<maplibregl.Marker | null>(null);
   const readyRef = useRef(false);
   const selectedRef = useRef<string | null>(null);
   const hoveredRef = useRef<string | null>(null);
@@ -262,6 +265,24 @@ export function MapView({
     if (!map || !flyTo) return;
     map.flyTo({ center: [flyTo.lon, flyTo.lat], zoom: 12.5, duration: 900 });
   }, [flyTo]);
+
+  // Drop / move / clear the address-search pin marker.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    if (!pin) {
+      markerRef.current?.remove();
+      markerRef.current = null;
+      return;
+    }
+    if (markerRef.current) {
+      markerRef.current.setLngLat([pin.lon, pin.lat]);
+    } else {
+      markerRef.current = new maplibregl.Marker({ color: "#f4a261" })
+        .setLngLat([pin.lon, pin.lat])
+        .addTo(map);
+    }
+  }, [pin]);
 
   return <div ref={containerRef} style={{ width: "100%", height: "100%" }} />;
 }

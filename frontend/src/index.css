@@ -80,6 +80,36 @@ button { font-family: inherit; cursor: pointer; }
 }
 .card .close:hover { color: #fff; }
 
+/* ── Address search (top-center over the map, clear of the side cards) ── */
+.search-box {
+  position: absolute; z-index: 1000; top: 68px; left: 50%; transform: translateX(-50%);
+  width: min(360px, calc(100vw - 540px));
+}
+.search-input {
+  width: 100%; box-sizing: border-box; padding: 9px 32px 9px 14px;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  color: var(--text); font-size: 0.9rem;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); backdrop-filter: blur(10px);
+}
+.search-input::placeholder { color: var(--muted); }
+.search-input:focus { outline: none; border-color: var(--accent); }
+.search-clear {
+  position: absolute; top: 7px; right: 10px; background: none; border: none;
+  color: var(--muted); font-size: 1.1rem; line-height: 1; cursor: pointer;
+}
+.search-clear:hover { color: #fff; }
+.search-results {
+  list-style: none; margin: 6px 0 0; padding: 4px; max-height: 50vh; overflow-y: auto;
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55); backdrop-filter: blur(10px);
+}
+.search-result {
+  display: block; width: 100%; text-align: left; padding: 7px 10px;
+  background: none; border: none; border-radius: 6px;
+  color: var(--text); font-size: 0.84rem; cursor: pointer;
+}
+.search-result:hover { background: rgba(244, 162, 97, 0.12); }
+
 /* ── Overlay radio list ── */
 .overlay-opt {
   display: flex; align-items: center; gap: 8px; padding: 5px 6px;

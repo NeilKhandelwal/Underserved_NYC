@@ -87,6 +87,21 @@ export function App() {
     }
   }
 
+  // Direct selection change (map click, detail-card close). Nothing to await,
+  // but it still counts as a navigation so a pending address lookup or list
+  // pick can't apply a stale selection or camera move afterwards.
+  function selectDirect(geoid: string | null) {
+    navSeqRef.current++;
+    setSelectedGeoid(geoid);
+  }
+
+  // Clearing the search removes the pin and invalidates any in-flight lookup,
+  // so a late response can't reopen a tract for a pin that is gone.
+  function clearSearch() {
+    navSeqRef.current++;
+    setPin(null);
+  }
+
   // Select a tract from the watchlist: fetch its centroid, fly there, show detail.
   async function selectFromList(geoid: string) {
     const seq = ++navSeqRef.current;
@@ -128,14 +143,14 @@ export function App() {
             selectedGeoid={selectedGeoid}
             flyTo={flyTo}
             pin={pin}
-            onSelect={(geoid) => setSelectedGeoid(geoid)}
+            onSelect={selectDirect}
           />
         )}
       </div>
 
       {tab === "map" && overlaysResp && overlay && (
         <>
-          <SearchBox onSelect={searchPlace} onClear={() => setPin(null)} />
+          <SearchBox onSelect={searchPlace} onClear={clearSearch} />
           <FilterCard
             overlays={overlaysResp.overlays}
             selected={overlay}
@@ -145,7 +160,7 @@ export function App() {
             onToggleDistricts={setShowDistricts}
           />
           {selectedGeoid && (
-            <DetailCard geoid={selectedGeoid} onClose={() => setSelectedGeoid(null)} />
+            <DetailCard geoid={selectedGeoid} onClose={() => selectDirect(null)} />
           )}
         </>
       )}

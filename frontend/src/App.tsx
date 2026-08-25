@@ -139,6 +139,14 @@ export function App() {
     }
   }
 
+  // Direct selection change (map click, detail-card close). Nothing to await,
+  // but it still counts as a navigation so a pending shared-link landing or
+  // list pick can't fly the map back to a tract that is no longer selected.
+  function selectDirect(geoid: string | null) {
+    navSeqRef.current++;
+    setSelectedGeoid(geoid);
+  }
+
   // Select a tract from the watchlist: fetch its centroid, fly there, show detail.
   async function selectFromList(geoid: string) {
     const seq = ++navSeqRef.current;
@@ -180,7 +188,7 @@ export function App() {
             selectedGeoid={selectedGeoid}
             flyTo={flyTo}
             pin={pin}
-            onSelect={(geoid) => setSelectedGeoid(geoid)}
+            onSelect={selectDirect}
           />
         )}
       </div>
@@ -196,7 +204,7 @@ export function App() {
             onToggleDistricts={setShowDistricts}
           />
           {selectedGeoid && (
-            <DetailCard geoid={selectedGeoid} onClose={() => setSelectedGeoid(null)} />
+            <DetailCard geoid={selectedGeoid} onClose={() => selectDirect(null)} />
           )}
           <MapLegend overlay={overlay} residualBins={overlaysResp.residual_bins} />
         </>

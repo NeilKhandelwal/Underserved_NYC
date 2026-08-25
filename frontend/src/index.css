@@ -74,11 +74,24 @@ button { font-family: inherit; cursor: pointer; }
 .card.filters { top: 68px; left: 16px; width: 248px; }
 .card.detail { top: 68px; right: 16px; width: 320px; }
 .card h3 { margin: 0 0 10px; font-size: 0.95rem; }
-.card .close {
-  position: absolute; top: 10px; right: 12px; background: none; border: none;
-  color: var(--muted); font-size: 1.1rem; line-height: 1;
+.card.collapsed { padding-bottom: 12px; }
+
+/* Card header: drag handle + minimize/close buttons. */
+.card-header {
+  display: flex; align-items: center; gap: 8px; margin: 0 0 8px;
+  cursor: grab; user-select: none; touch-action: none;
 }
-.card .close:hover { color: #fff; }
+.card-header:active { cursor: grabbing; }
+.card-header h3 {
+  margin: 0; flex: 1; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.card.collapsed .card-header { margin-bottom: 0; }
+.card-btn {
+  background: none; border: none; color: var(--muted);
+  font-size: 1rem; line-height: 1; padding: 2px 4px;
+}
+.card-btn:hover { color: #fff; }
 
 /* ── Address search (top-center over the map, clear of the side cards) ── */
 .search-box {
@@ -138,8 +151,24 @@ button { font-family: inherit; cursor: pointer; }
 }
 .legend-missing .swatch { width: 12px; height: 10px; border-radius: 2px; display: inline-block; }
 
+/* Static color key pinned to the bottom-left corner of the map, under the
+   (short) overlay card and clear of the tall detail card on the right. */
+.map-legend {
+  position: absolute; z-index: 1000; left: 16px; bottom: 16px; width: 220px;
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 10px; padding: 10px 12px 8px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+}
+.map-legend .legend-title {
+  font-size: 0.7rem; font-weight: 700; color: var(--text);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px;
+}
+.map-legend .legend-bar { margin-top: 0; }
+.map-legend .legend-ends { gap: 12px; }
+.map-legend .legend-note { margin-top: 6px; font-size: 0.66rem; }
+
 /* ── Detail card ── */
-.tract-name { font-size: 1.25rem; font-weight: 700; line-height: 1.15; }
 .tract-boro { font-size: 0.78rem; color: var(--accent); text-transform: uppercase; letter-spacing: 0.08em; }
 .tract-id { font-size: 0.72rem; color: #888; font-family: monospace; margin-top: 2px; }
 .score-big { text-align: center; margin: 14px 0; }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { MetricComparison, TractDetail, TractTimeSeries } from "../types";
 import { Sparkline, TrendBadge, trend } from "./Sparkline";
+import { FloatingCard } from "./FloatingCard";
 
 const BAND_CLASS = { high: "band-high", elevated: "band-elevated", low: "band-low" };
 
@@ -122,15 +123,15 @@ export function DetailCard({ geoid, onClose }: { geoid: string; onClose: () => v
   }, [geoid]);
 
   return (
-    <div className="card detail">
-      <button className="close" onClick={onClose} aria-label="Close">
-        ✕
-      </button>
+    <FloatingCard
+      className="detail"
+      title={detail ? (detail.neighborhood ?? "Unknown") : "Tract"}
+      onClose={onClose}
+    >
       {error && <div className="error">{error}</div>}
       {!detail && !error && <div className="loading">Loading…</div>}
       {detail && (
         <>
-          <div className="tract-name">{detail.neighborhood ?? "Unknown"}</div>
           <div className="tract-boro">
             {detail.borough}
             {detail.council_district != null && ` · District ${detail.council_district}`}
@@ -158,6 +159,6 @@ export function DetailCard({ geoid, onClose }: { geoid: string; onClose: () => v
           ))}
         </>
       )}
-    </div>
+    </FloatingCard>
   );
 }

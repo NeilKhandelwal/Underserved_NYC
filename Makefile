@@ -48,8 +48,8 @@ api: ## Run the FastAPI serving layer (http://127.0.0.1:8000, /docs for Swagger)
 test: ## Run the API test suite
 	$(PY) -m pytest tests/ -q
 
-lint: ## Lint api/, tests/, scripts/
-	.venv/bin/ruff check api/ tests/ scripts/
+lint: ## Lint api/, pipeline/, tests/, scripts/
+	.venv/bin/ruff check api/ pipeline/ tests/ scripts/
 
 frontend-install: ## Install frontend npm dependencies
 	cd frontend && npm install

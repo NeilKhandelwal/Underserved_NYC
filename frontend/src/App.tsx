@@ -140,11 +140,19 @@ export function App() {
   }
 
   // Direct selection change (map click, detail-card close). Nothing to await,
-  // but it still counts as a navigation so a pending shared-link landing or
-  // list pick can't fly the map back to a tract that is no longer selected.
+  // but it still counts as a navigation so a pending address lookup, list
+  // pick, or shared-link landing can't apply a stale selection or camera
+  // move afterwards.
   function selectDirect(geoid: string | null) {
     navSeqRef.current++;
     setSelectedGeoid(geoid);
+  }
+
+  // Clearing the search removes the pin and invalidates any in-flight lookup,
+  // so a late response can't reopen a tract for a pin that is gone.
+  function clearSearch() {
+    navSeqRef.current++;
+    setPin(null);
   }
 
   // Select a tract from the watchlist: fetch its centroid, fly there, show detail.
@@ -195,7 +203,7 @@ export function App() {
 
       {tab === "map" && overlaysResp && overlay && (
         <>
-          <SearchBox onSelect={searchPlace} onClear={() => setPin(null)} />
+          <SearchBox onSelect={searchPlace} onClear={clearSearch} />
           <FilterCard
             overlays={overlaysResp.overlays}
             selected={overlay}
